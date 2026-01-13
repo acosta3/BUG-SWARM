@@ -97,8 +97,7 @@ void Player::Update(float deltaTime, const InputState& in)
         case FACE_BACK:  sprite->SetAnimation(ANIM_IDLE_BACK, true);  break;
         }
 
-        // If you also want to freeze time after switching to idle:
-        // sprite->SetAnimation(-1);
+        
     }
 
     wasMovingLastFrame = false;
