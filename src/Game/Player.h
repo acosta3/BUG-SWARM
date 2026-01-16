@@ -7,11 +7,14 @@ class Player
 public:
     void Init();
     void Update(float deltaTime);
-    void Render() const;
+    void Render(float camOffsetX, float camOffsetY) const;
+
 
     // Input intent (fed by MyGame)
     void SetMoveInput(float x, float y) { moveX = x; moveY = y; }
     void SetStopAnimPressed(bool pressed) { stopAnimPressed = pressed; }
+
+    void GetWorldPosition(float& outX, float& outY) const;
 
 private:
     std::unique_ptr<CSimpleSprite> sprite;

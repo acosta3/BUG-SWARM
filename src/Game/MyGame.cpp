@@ -4,6 +4,8 @@
 void MyGame::Init()
 {
     player.Init();
+    camera.Init(1024.0f, 768.0f); // matches APP_VIRTUAL_WIDTH/HEIGHT
+
 }
 
 void MyGame::Update(float deltaTime)
@@ -15,12 +17,20 @@ void MyGame::Update(float deltaTime)
     player.SetStopAnimPressed(in.stopAnimPressed);
 
     player.Update(deltaTime);
+
+    float px, py;
+    player.GetWorldPosition(px, py);
+    camera.Follow(px, py);
+    camera.Update(deltaTime);
+
 }
 
 void MyGame::Render()
 {
-    player.Render();
+    player.Render(camera.GetOffsetX(), camera.GetOffsetY());
     App::Print(100, 100, "Sample Text");
+
+    
 }
 
 void MyGame::Shutdown()

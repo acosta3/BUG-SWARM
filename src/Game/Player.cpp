@@ -91,7 +91,22 @@ void Player::Update(float deltaTime)
     wasMovingLastFrame = false;
 }
 
-void Player::Render() const
+void Player::Render(float camOffsetX, float camOffsetY) const
 {
-    if (sprite) sprite->Draw();
+    if (!sprite) return;
+
+    float wx, wy;
+    sprite->GetPosition(wx, wy);
+
+    sprite->SetPosition(wx - camOffsetX, wy - camOffsetY);
+    sprite->Draw();
+
+    sprite->SetPosition(wx, wy); // restore world position
+}
+
+
+void Player::GetWorldPosition(float& outX, float& outY) const
+{
+    if (!sprite) { outX = 0.0f; outY = 0.0f; return; }
+    sprite->GetPosition(outX, outY);
 }

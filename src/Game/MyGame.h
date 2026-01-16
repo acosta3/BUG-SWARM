@@ -1,6 +1,7 @@
 #pragma once
 #include "Player.h"
 #include "Input.h"
+#include "CameraSystem.h"
 
 class MyGame
 {
@@ -13,4 +14,5 @@ public:
 private:
     InputSystem input;
     Player player;
+    CameraSystem camera;
 };
