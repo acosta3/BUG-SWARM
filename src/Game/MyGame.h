@@ -3,6 +3,7 @@
 #include "Input.h"
 #include "CameraSystem.h"
 #include "ZombieSystem.h"
+#include "AttackSystem.h"
 
 class MyGame
 {
@@ -34,6 +35,6 @@ private:
 
 private:
 	// Attack handling
-    void TryPlayerAttack(float px, float py, float deltaTimeMs);
-    float attackCooldownMs = 0.0f;
+    
+    AttackSystem attacks;
 };

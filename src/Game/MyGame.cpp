@@ -10,13 +10,21 @@ void MyGame::Init()
     // IMPORTANT: init pool before spawn
     zombies.Init(50000);
 
+
+
     // Spawn around the player's start position so it is always on-screen
     float px, py;
     player.GetWorldPosition(px, py);
     zombies.Spawn(10000, px, py);
 
+    // attack
+    attacks.Init();
+
+
     // Optional: set initial camera target so first frame is centered
     camera.Follow(px, py);
+
+
 }
 
 void MyGame::Update(float deltaTime)
@@ -36,9 +44,39 @@ void MyGame::Update(float deltaTime)
     float px, py;
     player.GetWorldPosition(px, py);
 
-    // ATTACK happens here (game coordinates the systems)
-    TryPlayerAttack(px, py, deltaTime);
+    // ATTACK
+    attacks.Update(deltaTime);
 
+    // Aim = movement direction, but keep last aim when idle
+    static float lastAimX = 0.0f;
+    static float lastAimY = 1.0f;
+
+    float aimX = in.moveX;
+    float aimY = in.moveY;
+
+    if (aimX * aimX + aimY * aimY > 0.0001f)
+    {
+        lastAimX = aimX;
+        lastAimY = aimY;
+    }
+    else
+    {
+        aimX = lastAimX;
+        aimY = lastAimY;
+    }
+
+    AttackInput a;
+    a.pulsePressed = in.pulsePressed;
+    a.slashPressed = in.slashPressed;
+    a.meteorPressed = in.meteorPressed;
+    a.aimX = aimX;
+    a.aimY = aimY;
+
+    attacks.Process(a, px, py, zombies, camera);
+
+     
+     
+    
     // Camera
     camera.Follow(px, py);
     camera.Update(deltaTime);
@@ -181,46 +219,6 @@ void MyGame::DrawZombieTri(float x, float y, float size, float r, float g, float
         r, g, b,
         false
     );
-}
-
-void MyGame::TryPlayerAttack(float px, float py, float deltaTimeMs)
-{
-    if (attackCooldownMs > 0.0f)
-    {
-        attackCooldownMs -= deltaTimeMs;
-        if (attackCooldownMs < 0.0f) attackCooldownMs = 0.0f;
-    }
-
-    const InputState& in = input.GetState();
-    if (!in.attackPressed || attackCooldownMs > 0.0f)
-        return;
-
-    const float attackRadius = 80.0f;
-    const float attackRadiusSq = attackRadius * attackRadius;
-
-    int killed = 0;
-
-    for (int i = 0; i < zombies.AliveCount(); )
-    {
-        float dx = zombies.GetX(i) - px;
-        float dy = zombies.GetY(i) - py;
-        float d2 = dx * dx + dy * dy;
-
-        if (d2 <= attackRadiusSq)
-        {
-            zombies.Kill(i); // swap-remove
-            killed++;
-        }
-        else
-        {
-            i++;
-        }
-    }
-
-    attackCooldownMs = 200.0f;
-
-    if (killed > 0)
-        camera.AddShake(6.0f, 0.08f);
 }
 
 

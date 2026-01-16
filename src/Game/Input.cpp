@@ -1,4 +1,6 @@
 #include "Input.h"
+#include "../ContestAPI/app.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -12,11 +14,10 @@ static float AxisFromKeys(App::Key neg, App::Key pos)
 
 int InputSystem::FindActivePadIndex() const
 {
-    // Pick the first controller that shows meaningful input
     const float STICK_EPS = 0.15f;
     const float TRIG_EPS = 0.20f;
 
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 4; i++)
     {
         const CController& p = CSimpleControllers::GetInstance().GetController(i);
 
@@ -47,7 +48,7 @@ int InputSystem::FindActivePadIndex() const
             return i;
     }
 
-    return padIndex; // keep last known if none active this frame
+    return padIndex;
 }
 
 void InputSystem::Update(float dt)
@@ -58,11 +59,11 @@ void InputSystem::Update(float dt)
     const float kx = AxisFromKeys(App::KEY_A, App::KEY_D);
     const float ky = AxisFromKeys(App::KEY_S, App::KEY_W);
 
-    // Choose active controller slot dynamically
+    // Active controller
     padIndex = FindActivePadIndex();
     const CController& pad = CSimpleControllers::GetInstance().GetController(padIndex);
 
-    // Controller axes (with deadzone)
+    // Controller axes (deadzone)
     float sx = pad.GetLeftThumbStickX();
     float sy = pad.GetLeftThumbStickY();
 
@@ -70,11 +71,11 @@ void InputSystem::Update(float dt)
     if (std::fabs(sx) < DEAD) sx = 0.0f;
     if (std::fabs(sy) < DEAD) sy = 0.0f;
 
-    // Combine keyboard + controller
+    // Combine
     state.moveX = std::clamp(kx + sx, -1.0f, 1.0f);
     state.moveY = std::clamp(ky + sy, -1.0f, 1.0f);
 
-    // Prevent faster diagonal movement
+    // Prevent faster diagonal
     float lenSq = state.moveX * state.moveX + state.moveY * state.moveY;
     if (lenSq > 1.0f)
     {
@@ -83,24 +84,30 @@ void InputSystem::Update(float dt)
         state.moveY *= invLen;
     }
 
-    // Stop anim: controller A just-pressed
+    // A: just pressed
     state.stopAnimPressed = pad.CheckButton(App::BTN_A, true);
 
-   
-
-    // Toggle view: V key (just-pressed) OR controller X (just-pressed)
+    // Toggle view: V key just-pressed OR down Dpad
     bool vNow = App::IsKeyPressed(App::KEY_V);
     state.toggleViewPressed = (vNow && !prevV);
     prevV = vNow;
+    state.toggleViewPressed = state.toggleViewPressed || pad.CheckButton(App::BTN_DPAD_DOWN, true);
 
-    state.toggleViewPressed = state.toggleViewPressed || pad.CheckButton(App::BTN_X, true);
-
+    // Pulse: Space just-pressed OR controller B
     bool spaceNow = App::IsKeyPressed(App::KEY_SPACE);
-    state.attackPressed = (spaceNow && !prevSpace);
+    state.pulsePressed = (spaceNow && !prevSpace);
     prevSpace = spaceNow;
+    state.pulsePressed = state.pulsePressed || pad.CheckButton(App::BTN_B, true);
 
-    state.attackPressed = state.attackPressed || pad.CheckButton(App::BTN_B, true);
+    // Slash: Q just-pressed OR controller X 
+    bool qNow = App::IsKeyPressed(App::KEY_Q);
+    state.slashPressed = (qNow && !prevQ);
+    prevQ = qNow;
+    state.slashPressed = state.slashPressed || pad.CheckButton(App::BTN_X, true);
 
-    // Optional debug overlay (remove later)
-    // App::Print(20, 20, "ActivePad=%d", padIndex);
+    // Meteor: E just-pressed OR controller Y
+    bool eNow = App::IsKeyPressed(App::KEY_E);
+    state.meteorPressed = (eNow && !prevE);
+    prevE = eNow;
+    state.meteorPressed = state.meteorPressed || pad.CheckButton(App::BTN_Y, true);
 }

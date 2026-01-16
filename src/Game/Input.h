@@ -1,31 +1,36 @@
 #pragma once
-#include "../ContestAPI/app.h"
 
 struct InputState
 {
     float moveX = 0.0f;
     float moveY = 0.0f;
+
     bool stopAnimPressed = false;
 
-    bool toggleViewPressed = false; // NEW (toggle density/entity view)
-    bool attackPressed = false; // attack
-    
+    bool toggleViewPressed = false;
+
+    // Attacks (just-pressed)
+    bool pulsePressed = false;   // Space / B
+    bool slashPressed = false;   // Q (or Shift) / X
+    bool meteorPressed = false;  // E / Y
 };
 
 class InputSystem
 {
 public:
     void Update(float dt);
-
     const InputState& GetState() const { return state; }
 
 private:
-    int padIndex = 0;      // active controller slot (0-3)
+    int padIndex = 0;
     InputState state;
 
-private:
-    int FindActivePadIndex() const; // helper
+    // Edge detection for keyboard
     bool prevV = false;
-    bool prevSpace = false; // attack
+    bool prevSpace = false;
+    bool prevQ = false;
+    bool prevE = false;
 
+private:
+    int FindActivePadIndex() const;
 };
