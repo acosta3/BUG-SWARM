@@ -41,6 +41,9 @@ public:
 
     void Update(float deltaTimeMs, float playerX, float playerY);
 
+    void TriggerFear(float sourceX, float sourceY, float radius, float durationMs);
+
+
 
     int AliveCount() const { return aliveCount; }
 
@@ -103,7 +106,8 @@ public:
     float GetWorldMinX() const { return worldMinX; }
     float GetWorldMinY() const { return worldMinY; }
     int GetCellCountAt(int cellIndex) const { return cellCount[cellIndex]; }
-
+    // Attack Getter
+    bool IsFeared(int i) const { return fearTimerMs[i] > 0.0f; }
 
 
 };

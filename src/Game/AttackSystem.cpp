@@ -51,12 +51,27 @@ void AttackSystem::Process(const AttackInput& in,
     }
 }
 
+static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
+{
+    if (!eliteKilled) return;
+
+    // Tunables
+    const float fearRadius = 750.0f;
+    const float fearDurationMs = 1200.0f;
+
+    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
+
+    // extra feedback
+    camera.AddShake(10.0f, 0.12f);
+}
+
 void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, CameraSystem& camera)
 {
     const float radius = 80.0f;
     const float r2 = radius * radius;
 
     int killed = 0;
+    bool eliteKilled = false;
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
@@ -66,6 +81,9 @@ void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, CameraSyst
 
         if (d2 <= r2)
         {
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
+                eliteKilled = true;
+
             zombies.Kill(i); // swap-remove
             killed++;
         }
@@ -77,16 +95,14 @@ void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, CameraSyst
 
     if (killed > 0)
         camera.AddShake(6.0f, 0.08f);
+
+    TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera)
 {
-    // Cone attack in front of player
-    // Range + angle are tunable
     const float range = 140.0f;
     const float range2 = range * range;
-
-    // cos(halfAngle). 0.707 = 45 degrees half-angle
     const float cosHalfAngle = 0.707f;
 
     // Normalize aim
@@ -104,6 +120,7 @@ void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSys
     }
 
     int killed = 0;
+    bool eliteKilled = false;
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
@@ -120,6 +137,9 @@ void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSys
         float d = std::sqrt(d2);
         if (d < 0.0001f)
         {
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
+                eliteKilled = true;
+
             zombies.Kill(i);
             killed++;
             continue;
@@ -128,9 +148,12 @@ void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSys
         float nx = zx / d;
         float ny = zy / d;
 
-        float dot = nx * aimX + ny * aimY; // -1..1
+        float dot = nx * aimX + ny * aimY;
         if (dot >= cosHalfAngle)
         {
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
+                eliteKilled = true;
+
             zombies.Kill(i);
             killed++;
         }
@@ -142,12 +165,13 @@ void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSys
 
     if (killed > 0)
         camera.AddShake(5.0f, 0.06f);
+
+    TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera)
 {
-    // Simple target point in front of player.
-    // Later you can target mouse position or right-stick direction.
+    // Normalize aim
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
     {
@@ -169,6 +193,7 @@ void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSy
     const float r2 = radius * radius;
 
     int killed = 0;
+    bool eliteKilled = false;
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
@@ -178,6 +203,9 @@ void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSy
 
         if (d2 <= r2)
         {
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
+                eliteKilled = true;
+
             zombies.Kill(i);
             killed++;
         }
@@ -189,4 +217,6 @@ void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSy
 
     if (killed > 0)
         camera.AddShake(8.0f, 0.10f);
+
+    TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
 }

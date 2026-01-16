@@ -174,6 +174,16 @@ void MyGame::Render()
                 continue;
 
             int t = zombies.GetType(i);
+            float r = rByType[t];
+            float g = gByType[t];
+            float b = bByType[t];
+
+            if (zombies.IsFeared(i))
+            {
+                r = 1.0f;
+                if (g < 0.85f) g = 0.85f;
+                b *= 0.25f;
+            }
             DrawZombieTri(x, y, sizeByType[t], rByType[t], gByType[t], bByType[t]);
             drawn++;
         }
@@ -188,6 +198,10 @@ void MyGame::Render()
     char buf2[96];
     std::snprintf(buf2, sizeof(buf2), "Sim: %d  Draw: %d  Step: %d", count, drawn, step);
     App::Print(20, 40, buf2);
+
+    char buf3[96];
+    std::snprintf(buf3, sizeof(buf3), "Feared: %d", zombies.FearedCount());
+    App::Print(20, 80, buf3);
 }
 
 
