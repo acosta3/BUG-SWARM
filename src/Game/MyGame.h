@@ -7,12 +7,17 @@ class MyGame
 {
 public:
     void Init();
+
     void Update(float deltaTime);
+
     void Render();
+
     void Shutdown();
 
 private:
     InputSystem input;
+
     Player player;
+
     CameraSystem camera;
 };

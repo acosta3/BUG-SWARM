@@ -9,7 +9,6 @@ public:
     void Update(float deltaTime);
     void Render(float camOffsetX, float camOffsetY) const;
 
-
     // Input intent (fed by MyGame)
     void SetMoveInput(float x, float y) { moveX = x; moveY = y; }
     void SetStopAnimPressed(bool pressed) { stopAnimPressed = pressed; }

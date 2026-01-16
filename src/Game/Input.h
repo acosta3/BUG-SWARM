@@ -12,6 +12,7 @@ class InputSystem
 {
 public:
     void Update(float dt);
+
     const InputState& GetState() const { return state; }
 
 private:
