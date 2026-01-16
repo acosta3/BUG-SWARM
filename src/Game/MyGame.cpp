@@ -8,7 +8,7 @@ void MyGame::Init()
     player.Init();
     camera.Init(1024.0f, 768.0f); // matches APP_VIRTUAL_WIDTH/HEIGHT
     zombies.Init(50000);
-    zombies.Spawn(2000, 512.0f, 384.0f);
+    zombies.Spawn(50000, 512.0f, 384.0f);
 
     // created once in Init()
     //CSimpleSprite* zombieSprite[4]; // or whatever your sprite type is // want to reuse the sprites
@@ -30,10 +30,12 @@ void MyGame::Update(float deltaTime)
 
     player.Update(deltaTime);
 
-    float px, py;
+	float px, py; // store the position of the player
     player.GetWorldPosition(px, py);
     camera.Follow(px, py);
     camera.Update(deltaTime);
+    zombies.Update(deltaTime, px, py);
+
 
     
 

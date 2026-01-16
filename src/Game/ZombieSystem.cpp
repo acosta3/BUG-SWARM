@@ -97,17 +97,51 @@ void ZombieSystem::Kill(int index)
     aliveCount--;
 }
 
-void ZombieSystem::Update(float deltaTimeMs)
+void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
 {
+    const float dt = deltaTimeMs / 1000.0f; // convert ms -> seconds
+    if (dt <= 0.0f) return;
+
     for (int i = 0; i < aliveCount; i++)
     {
+        // Timers
         if (fearTimerMs[i] > 0.f)
             fearTimerMs[i] = std::max(0.f, fearTimerMs[i] - deltaTimeMs);
 
         if (attackCooldownMs[i] > 0.f)
             attackCooldownMs[i] = std::max(0.f, attackCooldownMs[i] - deltaTimeMs);
+
+        // SEEK movement (simple + cheap)
+        const uint8_t t = type[i];
+        const ZombieTypeStats& s = typeStats[t];
+
+        float dx = playerX - posX[i];
+        float dy = playerY - posY[i];
+
+        float lenSq = dx * dx + dy * dy;
+        if (lenSq > 0.0001f)
+        {
+            float invLen = 1.0f / std::sqrt(lenSq);
+            dx *= invLen;
+            dy *= invLen;
+        }
+        else
+        {
+            dx = 0.0f;
+            dy = 0.0f;
+        }
+
+        // Velocity directly toward player (we’ll add separation next)
+        velX[i] = dx * s.maxSpeed;
+        velY[i] = dy * s.maxSpeed;
+
+        // Integrate
+        posX[i] += velX[i] * dt;
+        posY[i] += velY[i] * dt;
     }
 }
+
+
 
 void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
 {

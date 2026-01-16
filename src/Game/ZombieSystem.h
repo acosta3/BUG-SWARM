@@ -39,7 +39,8 @@ public:
     void Spawn(int count, float playerX, float playerY);
     void Kill(int index);
 
-    void Update(float deltaTimeMs);
+    void Update(float deltaTimeMs, float playerX, float playerY);
+
 
     int AliveCount() const { return aliveCount; }
 
