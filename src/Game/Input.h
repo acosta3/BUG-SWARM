@@ -3,12 +3,21 @@
 
 struct InputState
 {
-    float moveX = 0.0f;   // -1..1
-    float moveY = 0.0f;   // -1..1
-
-    bool stopAnimPressed = false; // “just pressed”
+    float moveX = 0.0f;
+    float moveY = 0.0f;
+    bool stopAnimPressed = false;
 };
-namespace Input
+
+class InputSystem
 {
-    InputState Poll();
-}
+public:
+    void Update(float dt);
+    const InputState& GetState() const { return state; }
+
+private:
+    int padIndex = 0;      // active controller slot (0-3)
+    InputState state;
+
+private:
+    int FindActivePadIndex() const; // helper
+};

@@ -1,18 +1,25 @@
 #pragma once
 #include "../ContestAPI/app.h"
-#include "Input.h"
 #include <memory>
 
 class Player
 {
 public:
     void Init();
-    void Update(float deltaTime, const InputState& in);
+    void Update(float deltaTime);
     void Render() const;
+
+    // Input intent (fed by MyGame)
+    void SetMoveInput(float x, float y) { moveX = x; moveY = y; }
+    void SetStopAnimPressed(bool pressed) { stopAnimPressed = pressed; }
 
 private:
     std::unique_ptr<CSimpleSprite> sprite;
     float speedPixelsPerSec = 200.0f;
+
+    float moveX = 0.0f;
+    float moveY = 0.0f;
+    bool stopAnimPressed = false;
 
     enum Anim
     {
@@ -30,8 +37,5 @@ private:
     enum Facing { FACE_BACK, FACE_LEFT, FACE_RIGHT, FACE_FWD };
     Facing facing = FACE_FWD;
 
-  
-
     bool wasMovingLastFrame = false;
-
 };

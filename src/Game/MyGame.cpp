@@ -1,5 +1,4 @@
 #include "MyGame.h"
-#include "Input.h"
 #include "../ContestAPI/app.h"
 
 void MyGame::Init()
@@ -9,8 +8,13 @@ void MyGame::Init()
 
 void MyGame::Update(float deltaTime)
 {
-    InputState in = Input::Poll();
-    player.Update(deltaTime, in);
+    input.Update(deltaTime);
+    const InputState& in = input.GetState();
+
+    player.SetMoveInput(in.moveX, in.moveY);
+    player.SetStopAnimPressed(in.stopAnimPressed);
+
+    player.Update(deltaTime);
 }
 
 void MyGame::Render()
@@ -21,8 +25,7 @@ void MyGame::Render()
 
 void MyGame::Shutdown()
 {
-    // If Player uses unique_ptr, nothing required.
-    // 
-    // 
-    // If Player uses raw pointer, call player.Shutdown().
+    // Nothing required right now:
+    // - Player owns sprite via unique_ptr
+    // - InputSystem has no heap allocations
 }

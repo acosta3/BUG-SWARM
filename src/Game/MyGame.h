@@ -1,5 +1,6 @@
 #pragma once
 #include "Player.h"
+#include "Input.h"
 
 class MyGame
 {
@@ -10,5 +11,6 @@ public:
     void Shutdown();
 
 private:
+    InputSystem input;
     Player player;
 };
