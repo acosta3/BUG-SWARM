@@ -50,7 +50,7 @@ int InputSystem::FindActivePadIndex() const
     return padIndex; // keep last known if none active this frame
 }
 
-void InputSystem::Update(float /*dt*/)
+void InputSystem::Update(float dt)
 {
     state = {};
 
