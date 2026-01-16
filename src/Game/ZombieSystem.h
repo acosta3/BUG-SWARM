@@ -70,4 +70,29 @@ private:
 private:
     void InitTypeStats();
     uint8_t RollTypeWeighted() const;
+
+private:
+	// spatial hashing for separation
+   
+    
+    float cellSize = 40.0f;      // tweak later
+    int gridW = 0;
+    int gridH = 0;
+
+    std::vector<int> cellStart;  // size = gridW*gridH + 1
+    std::vector<int> cellCount;  // size = gridW*gridH
+    std::vector<int> cellList;   // size = aliveCount (indices)
+    std::vector<int> writeCursor;
+
+
+    // world bounds for grid (simple, can be big) 
+    float worldMinX = -5000.0f; // have to decide how big later
+    float worldMinY = -5000.0f;
+    float worldMaxX = 5000.0f;
+    float worldMaxY = 5000.0f;
+
+    int  CellIndex(float x, float y) const;
+    void BuildGrid();
+
+
 };

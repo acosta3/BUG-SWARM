@@ -1,4 +1,4 @@
-#include "ZombieSystem.h"
+ï»¿#include "ZombieSystem.h"
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -26,6 +26,17 @@ void ZombieSystem::Init(int maxZombies)
     hp.resize(maxCount);
 
     InitTypeStats();
+
+    gridW = (int)((worldMaxX - worldMinX) / cellSize) + 1;
+    gridH = (int)((worldMaxY - worldMinY) / cellSize) + 1;
+
+    cellStart.resize(gridW * gridH + 1);
+    cellCount.resize(gridW * gridH);
+    writeCursor.resize(gridW * gridH + 1);
+    cellList.resize(maxCount);
+
+
+
 }
 
 void ZombieSystem::InitTypeStats()
@@ -44,6 +55,49 @@ uint8_t ZombieSystem::RollTypeWeighted() const
     if (r < 0.99f) return BLUE;
     return PURPLE_ELITE;
 }
+
+int ZombieSystem::CellIndex(float x, float y) const
+{
+    int cx = (int)((x - worldMinX) / cellSize);
+    int cy = (int)((y - worldMinY) / cellSize);
+
+    cx = std::clamp(cx, 0, gridW - 1);
+    cy = std::clamp(cy, 0, gridH - 1);
+
+    return cy * gridW + cx;
+}
+
+void ZombieSystem::BuildGrid()
+{
+    const int cellN = gridW * gridH;
+
+    // Reset counts
+    std::fill(cellCount.begin(), cellCount.end(), 0);
+
+    // Count zombies per cell
+    for (int i = 0; i < aliveCount; i++)
+    {
+        int c = CellIndex(posX[i], posY[i]);
+        cellCount[c]++;
+    }
+
+    // Prefix sum -> cellStart
+    cellStart[0] = 0;
+    for (int c = 0; c < cellN; c++)
+        cellStart[c + 1] = cellStart[c] + cellCount[c];
+
+    // Copy start indices into reusable cursor (NO allocation)
+    writeCursor = cellStart;
+
+    // Fill cellList grouped by cell
+    for (int i = 0; i < aliveCount; i++)
+    {
+        int c = CellIndex(posX[i], posY[i]);
+        int dst = writeCursor[c]++;
+        cellList[dst] = i;
+    }
+}
+
 
 void ZombieSystem::Clear()
 {
@@ -99,8 +153,10 @@ void ZombieSystem::Kill(int index)
 
 void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
 {
-    const float dt = deltaTimeMs / 1000.0f; // convert ms -> seconds
+    const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return;
+
+    BuildGrid(); //  must be here (once per frame)
 
     for (int i = 0; i < aliveCount; i++)
     {
@@ -111,10 +167,10 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
         if (attackCooldownMs[i] > 0.f)
             attackCooldownMs[i] = std::max(0.f, attackCooldownMs[i] - deltaTimeMs);
 
-        // SEEK movement (simple + cheap)
         const uint8_t t = type[i];
         const ZombieTypeStats& s = typeStats[t];
 
+        // SEEK direction
         float dx = playerX - posX[i];
         float dy = playerY - posY[i];
 
@@ -131,15 +187,81 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
             dy = 0.0f;
         }
 
-        // Velocity directly toward player (we’ll add separation next)
-        velX[i] = dx * s.maxSpeed;
-        velY[i] = dy * s.maxSpeed;
+        // Separation (grid neighbors)
+        float sepX = 0.0f;
+        float sepY = 0.0f;
 
-        // Integrate
+        const float sepRadius = 18.0f;
+        const float sepRadiusSq = sepRadius * sepRadius;
+
+        int c = CellIndex(posX[i], posY[i]);
+        int cx = c % gridW;
+        int cy = c / gridW;
+
+        for (int oy = -1; oy <= 1; oy++)
+        {
+            int ny = cy + oy;
+            if (ny < 0 || ny >= gridH) continue;
+
+            for (int ox = -1; ox <= 1; ox++)
+            {
+                int nx = cx + ox;
+                if (nx < 0 || nx >= gridW) continue;
+
+                int nc = ny * gridW + nx;
+
+                int start = cellStart[nc];
+                int end = cellStart[nc + 1];
+
+                for (int k = start; k < end; k++)
+                {
+                    int j = cellList[k];
+                    if (j == i) continue;
+
+                    float ax = posX[i] - posX[j];
+                    float ay = posY[i] - posY[j];
+                    float d2 = ax * ax + ay * ay;
+
+                    if (d2 > 0.0001f && d2 < sepRadiusSq)
+                    {
+                        float d = std::sqrt(d2);
+                        float invD = 1.0f / d;
+
+                        float push = (sepRadius - d) / sepRadius; // 0..1
+                        sepX += ax * invD * push;
+                        sepY += ay * invD * push;
+                    }
+                }
+            }
+        }
+
+        // Combine seek + separation
+        float vx = dx * s.seekWeight + sepX * s.sepWeight;
+        float vy = dy * s.seekWeight + sepY * s.sepWeight;
+
+        // Normalize final direction
+        float v2 = vx * vx + vy * vy;
+        if (v2 > 0.0001f)
+        {
+            float invV = 1.0f / std::sqrt(v2);
+            vx *= invV;
+            vy *= invV;
+        }
+        else
+        {
+            vx = 0.0f;
+            vy = 0.0f;
+        }
+
+        // Apply speed + integrate
+        velX[i] = vx * s.maxSpeed;
+        velY[i] = vy * s.maxSpeed;
+
         posX[i] += velX[i] * dt;
         posY[i] += velY[i] * dt;
     }
 }
+
 
 
 
