@@ -86,12 +86,20 @@ void InputSystem::Update(float dt)
     // Stop anim: controller A just-pressed
     state.stopAnimPressed = pad.CheckButton(App::BTN_A, true);
 
+   
+
     // Toggle view: V key (just-pressed) OR controller X (just-pressed)
     bool vNow = App::IsKeyPressed(App::KEY_V);
     state.toggleViewPressed = (vNow && !prevV);
     prevV = vNow;
 
     state.toggleViewPressed = state.toggleViewPressed || pad.CheckButton(App::BTN_X, true);
+
+    bool spaceNow = App::IsKeyPressed(App::KEY_SPACE);
+    state.attackPressed = (spaceNow && !prevSpace);
+    prevSpace = spaceNow;
+
+    state.attackPressed = state.attackPressed || pad.CheckButton(App::BTN_B, true);
 
     // Optional debug overlay (remove later)
     // App::Print(20, 20, "ActivePad=%d", padIndex);

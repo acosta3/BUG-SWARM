@@ -18,6 +18,8 @@ public:
     static void DrawZombieTri(float x, float y, float size,
         float r, float g, float b);
 
+   
+
 private:
     InputSystem input;
 
@@ -29,4 +31,9 @@ private:
 private:
     bool densityView = false;
     static float Clamp01(float v);
+
+private:
+	// Attack handling
+    void TryPlayerAttack(float px, float py, float deltaTimeMs);
+    float attackCooldownMs = 0.0f;
 };
