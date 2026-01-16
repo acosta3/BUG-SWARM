@@ -16,7 +16,7 @@ int InputSystem::FindActivePadIndex() const
     const float STICK_EPS = 0.15f;
     const float TRIG_EPS = 0.20f;
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 10; i++)
     {
         const CController& p = CSimpleControllers::GetInstance().GetController(i);
 
@@ -85,6 +85,13 @@ void InputSystem::Update(float dt)
 
     // Stop anim: controller A just-pressed
     state.stopAnimPressed = pad.CheckButton(App::BTN_A, true);
+
+    // Toggle view: V key (just-pressed) OR controller X (just-pressed)
+    bool vNow = App::IsKeyPressed(App::KEY_V);
+    state.toggleViewPressed = (vNow && !prevV);
+    prevV = vNow;
+
+    state.toggleViewPressed = state.toggleViewPressed || pad.CheckButton(App::BTN_X, true);
 
     // Optional debug overlay (remove later)
     // App::Print(20, 20, "ActivePad=%d", padIndex);

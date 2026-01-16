@@ -34,16 +34,13 @@ void ZombieSystem::Init(int maxZombies)
     cellCount.resize(gridW * gridH);
     writeCursor.resize(gridW * gridH + 1);
     cellList.resize(maxCount);
-
-
-
 }
 
 void ZombieSystem::InitTypeStats()
 {
-    typeStats[GREEN] = { 60.f, 1.f, 1.f, 1, 1, 750.f, 0.f };
-    typeStats[RED] = { 90.f, 1.f, 1.f, 1, 1, 650.f, 0.f };
-    typeStats[BLUE] = { 45.f, 1.f, 1.f, 4, 2, 900.f, 0.f };
+    typeStats[GREEN] = { 60.f, 1.f, 1.f,  1, 1, 750.f,   0.f };
+    typeStats[RED] = { 90.f, 1.f, 1.f,  1, 1, 650.f,   0.f };
+    typeStats[BLUE] = { 45.f, 1.f, 1.f,  4, 2, 900.f,   0.f };
     typeStats[PURPLE_ELITE] = { 65.f, 1.f, 1.f, 12, 3, 850.f, 220.f };
 }
 
@@ -71,25 +68,21 @@ void ZombieSystem::BuildGrid()
 {
     const int cellN = gridW * gridH;
 
-    // Reset counts
     std::fill(cellCount.begin(), cellCount.end(), 0);
 
-    // Count zombies per cell
     for (int i = 0; i < aliveCount; i++)
     {
         int c = CellIndex(posX[i], posY[i]);
         cellCount[c]++;
     }
 
-    // Prefix sum -> cellStart
     cellStart[0] = 0;
     for (int c = 0; c < cellN; c++)
         cellStart[c + 1] = cellStart[c] + cellCount[c];
 
-    // Copy start indices into reusable cursor (NO allocation)
+    // No allocation after Init()
     writeCursor = cellStart;
 
-    // Fill cellList grouped by cell
     for (int i = 0; i < aliveCount; i++)
     {
         int c = CellIndex(posX[i], posY[i]);
@@ -97,7 +90,6 @@ void ZombieSystem::BuildGrid()
         cellList[dst] = i;
     }
 }
-
 
 void ZombieSystem::Clear()
 {
@@ -156,7 +148,11 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
     const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return;
 
-    BuildGrid(); //  must be here (once per frame)
+    BuildGrid();
+
+    // SIM LOD: only do separation near the player
+    const float sepActiveRadius = 600.0f;
+    const float sepActiveRadiusSq = sepActiveRadius * sepActiveRadius;
 
     for (int i = 0; i < aliveCount; i++)
     {
@@ -170,7 +166,7 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
         const uint8_t t = type[i];
         const ZombieTypeStats& s = typeStats[t];
 
-        // SEEK direction
+        // SEEK direction (to player)
         float dx = playerX - posX[i];
         float dy = playerY - posY[i];
 
@@ -186,6 +182,22 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
             dx = 0.0f;
             dy = 0.0f;
         }
+
+        // ---- SIM LOD EARLY-OUT (seek only when far) ----
+        float pdx = playerX - posX[i];
+        float pdy = playerY - posY[i];
+        float distSqToPlayer = pdx * pdx + pdy * pdy;
+
+        if (distSqToPlayer > sepActiveRadiusSq)
+        {
+            velX[i] = dx * s.maxSpeed;
+            velY[i] = dy * s.maxSpeed;
+
+            posX[i] += velX[i] * dt;
+            posY[i] += velY[i] * dt;
+            continue;
+        }
+        // ------------------------------------------------
 
         // Separation (grid neighbors)
         float sepX = 0.0f;
@@ -261,9 +273,6 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
         posY[i] += velY[i] * dt;
     }
 }
-
-
-
 
 void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
 {

@@ -26,4 +26,7 @@ private:
     CameraSystem camera;
 
 	ZombieSystem zombies;
+private:
+    bool densityView = false;
+    static float Clamp01(float v);
 };

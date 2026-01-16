@@ -94,5 +94,16 @@ private:
     int  CellIndex(float x, float y) const;
     void BuildGrid();
 
+public:
+
+    // --- Density view helpers (read-only) ---
+    int GetGridW() const { return gridW; }
+    int GetGridH() const { return gridH; }
+    float GetCellSize() const { return cellSize; }
+    float GetWorldMinX() const { return worldMinX; }
+    float GetWorldMinY() const { return worldMinY; }
+    int GetCellCountAt(int cellIndex) const { return cellCount[cellIndex]; }
+
+
 
 };

@@ -6,6 +6,8 @@ struct InputState
     float moveX = 0.0f;
     float moveY = 0.0f;
     bool stopAnimPressed = false;
+
+    bool toggleViewPressed = false; // NEW (toggle density/entity view)
 };
 
 class InputSystem
@@ -21,4 +23,6 @@ private:
 
 private:
     int FindActivePadIndex() const; // helper
+    bool prevV = false;
+
 };
