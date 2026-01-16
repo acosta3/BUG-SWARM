@@ -23,9 +23,9 @@ public:
         targetY = worldY;
     }
 
-    void Update(float deltaTimeMs)
+    void Update(float deltaTime)
     {
-        const float dt = deltaTimeMs / 1000.0f;
+        const float dt = deltaTime / 1000.0f;
 
         // Smooth follow (exponential)
         // Bigger = snappier camera
@@ -72,7 +72,7 @@ private:
     float shakeTimeLeft = 0.0f;
     float shakeStrength = 0.0f;
 
-    mutable unsigned int seed = 0;
+	mutable unsigned int seed = 0; // let constant methods modify
 
 private:
     float Rand01() const
