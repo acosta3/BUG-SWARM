@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include <queue>
+#include <limits>
 
 struct ZombieTypeStats
 {

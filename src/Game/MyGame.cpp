@@ -199,9 +199,9 @@ void MyGame::Render()
     std::snprintf(buf2, sizeof(buf2), "Sim: %d  Draw: %d  Step: %d", count, drawn, step);
     App::Print(20, 40, buf2);
 
-    char buf3[96];
-    std::snprintf(buf3, sizeof(buf3), "Feared: %d", zombies.FearedCount());
-    App::Print(20, 80, buf3);
+    
+
+
 }
 
 
