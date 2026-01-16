@@ -1,5 +1,8 @@
 #include "MyGame.h"
 #include "../ContestAPI/app.h"
+#include <cstdio>
+
+
 void MyGame::Init()
 {
     player.Init();
@@ -32,7 +35,7 @@ void MyGame::Update(float deltaTime)
     camera.Follow(px, py);
     camera.Update(deltaTime);
 
-    App::Print(20, 20, "Zombies: %d", zombies.AliveCount());
+    
 
 
 }
@@ -45,8 +48,15 @@ void MyGame::Render()
     const float offY = camera.GetOffsetY();
 
     player.Render(offX, offY);
-    App::Print(100, 100, "Sample Text");
 
+    // print statement
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Zombies: %d", zombies.AliveCount());
+    App::Print(200, 20, buf, 1.0f, 1.0f, 0.0f, GLUT_BITMAP_9_BY_15);
+   
+
+	// Want to draw zombies here
+    // use sprite and reuse them
     for (int i = 0; i < zombies.AliveCount(); i++)
     {
         float worldX = zombies.GetX(i);
