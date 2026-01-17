@@ -1,7 +1,8 @@
-﻿// ZombieSystem.cpp (gold standard)
+﻿// ZombieSystem.cpp (gold standard + touch damage)
 // - Default: direct seek + separation
 // - Only when blocked by world/nav obstacle: enable short flow assist
 // - Always resolve movement with axis sliding (full, X-only, Y-only)
+// - Adds: touch damage (cooldown-gated) returned as damageThisFrame
 // - Works well with 10k+ agents
 
 #include "ZombieSystem.h"
@@ -43,7 +44,6 @@ static bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
     if (!nav.IsBlockedWorld(nx, ny))
     {
         x = nx;
-        // If vx was ~0, this "move" can be basically nothing
         float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
         return moved2 > 0.0001f;
     }
@@ -211,10 +211,21 @@ void ZombieSystem::Kill(int index)
     aliveCount--;
 }
 
-void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
+// Returns: total touch-damage dealt to the player this frame.
+// NOTE: You must update ZombieSystem.h signature to match:
+// int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
+int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
     const float dt = deltaTimeMs / 1000.0f;
-    if (dt <= 0.0f) return;
+    if (dt <= 0.0f) return 0;
+
+    int damageThisFrame = 0;
+
+    // Touch hit tuning (match your player collision size)
+    const float playerRadius = 16.0f;
+    const float zombieRadius = 14.0f;
+    const float hitDist = playerRadius + zombieRadius;
+    const float hitDistSq = hitDist * hitDist;
 
     BuildGrid(); // separation grid, once per frame
 
@@ -258,12 +269,19 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         const uint8_t t = type[i];
         const ZombieTypeStats& s = typeStats[t];
 
-        // Dist to player (LOD + despawn)
+        // Dist to player (LOD + despawn + touch damage)
         float toPX = playerX - posX[i];
         float toPY = playerY - posY[i];
         float distSqToPlayer = toPX * toPX + toPY * toPY;
 
         const bool feared = (fearTimerMs[i] > 0.0f);
+
+        // Touch damage (cooldown-gated)
+        if (attackCooldownMs[i] <= 0.0f && distSqToPlayer <= hitDistSq)
+        {
+            damageThisFrame += (int)s.touchDamage;
+            attackCooldownMs[i] = s.attackCooldownMs;
+        }
 
         // Despawn if feared and far away
         if (feared && distSqToPlayer > fleeDespawnRadiusSq)
@@ -299,7 +317,7 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
 
             // Use same resolver so feared zombies also slide cleanly
             bool fullBlocked = false;
-            bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+            (void)ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
             i++;
             continue;
@@ -364,11 +382,8 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
             bool fullBlocked = false;
             bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
-            if (fullBlocked)
-                flowAssistMs[i] = flowAssistBurstMs;
-
-            if (!moved)
-                flowAssistMs[i] = flowAssistBurstMs;
+            if (fullBlocked) flowAssistMs[i] = flowAssistBurstMs;
+            if (!moved)      flowAssistMs[i] = flowAssistBurstMs;
 
             i++;
             continue;
@@ -442,14 +457,13 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         bool fullBlocked = false;
         bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
-        if (fullBlocked)
-            flowAssistMs[i] = flowAssistBurstMs;
-
-        if (!moved)
-            flowAssistMs[i] = flowAssistBurstMs;
+        if (fullBlocked) flowAssistMs[i] = flowAssistBurstMs;
+        if (!moved)      flowAssistMs[i] = flowAssistBurstMs;
 
         i++;
     }
+
+    return damageThisFrame;
 }
 
 void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float durationMs)

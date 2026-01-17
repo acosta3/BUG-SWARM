@@ -21,6 +21,17 @@ public:
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
 
+public:
+    void TakeDamage(int amount);
+    bool IsDead() const { return dead; }
+    int GetHealth() const { return health; }
+    int GetMaxHealth() const { return maxHealth; }
+
+private:
+    int health = 100;
+    int maxHealth = 100;
+    bool dead = false;
+
 private:
     std::unique_ptr<CSimpleSprite> sprite;
     float speedPixelsPerSec = 200.0f;

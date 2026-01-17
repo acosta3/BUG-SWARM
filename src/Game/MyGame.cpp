@@ -69,6 +69,7 @@ void MyGame::Init()
 
 void MyGame::Update(float deltaTime)
 {
+    input.SetEnabled(!player.IsDead()); // controls if still not dead
     input.Update(deltaTime);
     const InputState& in = input.GetState();
 
@@ -140,8 +141,12 @@ void MyGame::Update(float deltaTime)
     camera.Follow(px, py);
     camera.Update(deltaTime);
 
-    // Zombies chase the player (after attack is fine)
-    zombies.Update(deltaTime, px, py,nav);
+    
+    int dmg = zombies.Update(deltaTime, px, py, nav);
+    if (dmg > 0) player.TakeDamage(dmg);
+
+   
+
 }
 
 
@@ -264,6 +269,10 @@ void MyGame::Render()
     App::Print(20, 40, buf2);
 
     
+    char bufHP[96];
+    std::snprintf(bufHP, sizeof(bufHP), "HP: %d/%d",
+        player.GetHealth(), player.GetMaxHealth());
+    App::Print(500, 40, bufHP);
 
 
 }

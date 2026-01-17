@@ -1,3 +1,4 @@
+// Input.cpp
 #include "Input.h"
 #include "../ContestAPI/app.h"
 
@@ -45,7 +46,9 @@ int InputSystem::FindActivePadIndex() const
             p.CheckButton(App::BTN_BACK, false) ||
             p.CheckButton(App::BTN_DPAD_LEFT, false) ||
             p.CheckButton(App::BTN_DPAD_RIGHT, false) ||
-            p.CheckButton(App::BTN_DPAD_DOWN, false);
+            p.CheckButton(App::BTN_DPAD_DOWN, false) ||
+            p.CheckButton(App::BTN_LBUMPER, false) ||
+            p.CheckButton(App::BTN_RBUMPER, false);
 
         if (anyStick || anyTrig || anyButton)
             return i;
@@ -57,6 +60,14 @@ int InputSystem::FindActivePadIndex() const
 void InputSystem::Update(float dt)
 {
     state = {};
+
+    // If input is disabled, return neutral state
+    if (!inputEnabled)
+    {
+        // Reset edge detectors so inputs don't "pop" when re-enabled
+        prevV = prevSpace = prevQ = prevE = false;
+        return;
+    }
 
     // Keyboard axes
     const float kx = AxisFromKeys(App::KEY_A, App::KEY_D);
@@ -90,7 +101,7 @@ void InputSystem::Update(float dt)
     // A: just pressed
     state.stopAnimPressed = pad.CheckButton(App::BTN_A, true);
 
-    // Toggle view: V key just-pressed OR down Dpad
+    // Toggle view: V key just-pressed OR Dpad Down
     bool vNow = App::IsKeyPressed(App::KEY_V);
     state.toggleViewPressed = (vNow && !prevV);
     prevV = vNow;
@@ -102,7 +113,7 @@ void InputSystem::Update(float dt)
     prevSpace = spaceNow;
     state.pulsePressed = state.pulsePressed || pad.CheckButton(App::BTN_B, true);
 
-    // Slash: Q just-pressed OR controller X 
+    // Slash: Q just-pressed OR controller X
     bool qNow = App::IsKeyPressed(App::KEY_Q);
     state.slashPressed = (qNow && !prevQ);
     prevQ = qNow;
@@ -114,12 +125,10 @@ void InputSystem::Update(float dt)
     prevE = eNow;
     state.meteorPressed = state.meteorPressed || pad.CheckButton(App::BTN_Y, true);
 
-
-    // Scale controls: DPad Right/Left OR keyboard arrows (held)
+    // Scale controls: Right/Left Arrow OR controller bumpers (held)
     const bool rightNow = App::IsKeyPressed(App::KEY_RIGHT);
     const bool leftNow = App::IsKeyPressed(App::KEY_LEFT);
 
     state.scaleUpHeld = rightNow || pad.CheckButton(App::BTN_RBUMPER, false);
     state.scaleDownHeld = leftNow || pad.CheckButton(App::BTN_LBUMPER, false);
-
 }

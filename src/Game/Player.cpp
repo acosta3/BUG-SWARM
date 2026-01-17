@@ -25,6 +25,8 @@ void Player::Update(float deltaTime)
 {
     if (!sprite) return;
 
+   
+
     sprite->Update(deltaTime);
 
     if (stopAnimPressed)
@@ -134,6 +136,22 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     sprite->SetScale(s);
 }
+
+void Player::TakeDamage(int amount)
+{
+    if (dead) return;
+
+    health -= amount;
+    if (health < 0) health = 0;
+
+    if (health == 0)
+    {
+        dead = true;
+        if (sprite) sprite->SetAnimation(-1); // stop anim (if supported)
+    }
+}
+
+
 bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 {
     if (!nav) return false;

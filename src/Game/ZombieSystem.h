@@ -43,7 +43,7 @@ public:
     void Kill(int index);
 
     // Uses nav flow-field for seek (obstacles), and ZombieSystem grid for separation
-    void Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
+    int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
 
     // Fear API
     void TriggerFear(float sourceX, float sourceY, float radius, float durationMs);
