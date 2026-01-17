@@ -18,14 +18,48 @@ void MyGame::Init()
     nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f); // nav cell size can be bigger
     nav.ClearObstacles();
 
-    // Add some starter obstacles
+    // 20 small obstacles, spaced out (good for testing)
+
+    // Row 1
+    nav.AddObstacleRect(-420.0f, -260.0f, -380.0f, -220.0f);
+    nav.AddObstacleCircle(-300.0f, -240.0f, 22.0f);
+    nav.AddObstacleRect(-220.0f, -270.0f, -180.0f, -230.0f);
+    nav.AddObstacleCircle(-100.0f, -240.0f, 22.0f);
+    nav.AddObstacleRect(0.0f, -260.0f, 40.0f, -220.0f);
+
+    // Row 2
+    nav.AddObstacleCircle(-380.0f, -120.0f, 22.0f);
+    nav.AddObstacleRect(-280.0f, -140.0f, -240.0f, -100.0f);
+    nav.AddObstacleCircle(-160.0f, -120.0f, 22.0f);
+    nav.AddObstacleRect(-60.0f, -140.0f, -20.0f, -100.0f);
+    nav.AddObstacleCircle(80.0f, -120.0f, 22.0f);
+
+    // Row 3
+    nav.AddObstacleRect(-420.0f, 0.0f, -380.0f, 40.0f);
+    nav.AddObstacleCircle(-300.0f, 20.0f, 22.0f);
+    nav.AddObstacleRect(-220.0f, -10.0f, -180.0f, 30.0f);
+    nav.AddObstacleCircle(-100.0f, 20.0f, 22.0f);
+    nav.AddObstacleRect(0.0f, 0.0f, 40.0f, 40.0f);
+
+    // Row 4
+    nav.AddObstacleCircle(-380.0f, 140.0f, 22.0f);
+    nav.AddObstacleRect(-280.0f, 120.0f, -240.0f, 160.0f);
+    nav.AddObstacleCircle(-160.0f, 140.0f, 22.0f);
+    nav.AddObstacleRect(-60.0f, 120.0f, -20.0f, 160.0f);
+    nav.AddObstacleCircle(80.0f, 140.0f, 22.0f);
+
+
+
+    //nav.ClearObstacles();
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
-    //nav.AddObstacleRect(-400.0f, 150.0f, 400.0f, 200.0f);
-    //nav.AddObstacleCircle(200.0f, 0.0f, 120.0f);
+    // nav.AddObstacleCircle(...);
+
+   
+
 
     // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
     zombies.Init(50000, nav);          // <-- if you changed Init signature
-    zombies.Spawn(100, px, py);
+    zombies.Spawn(10'000, px, py);
 
     // 5) Attacks last (depends on zombies + camera existing)
     attacks.Init();
@@ -37,6 +71,10 @@ void MyGame::Update(float deltaTime)
     input.Update(deltaTime);
     const InputState& in = input.GetState();
 
+
+    
+    
+
     // Toggle views
     if (in.toggleViewPressed)
         densityView = !densityView;
@@ -44,6 +82,7 @@ void MyGame::Update(float deltaTime)
     // Player movement
     player.SetMoveInput(in.moveX, in.moveY);
     player.Update(deltaTime);
+    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTime);
 
     // Player position
     float px, py;

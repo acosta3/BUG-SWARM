@@ -110,3 +110,23 @@ void Player::GetWorldPosition(float& outX, float& outY) const
     if (!sprite) { outX = 0.0f; outY = 0.0f; return; }
     sprite->GetPosition(outX, outY);
 }
+
+void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime)
+{
+    if (!sprite) return;
+
+    float s = sprite->GetScale();
+
+    // scale speed: units per second (tweak this)
+    const float scalePerSec = 1.0f;
+    const float dt = deltaTime / 1000.0f;
+
+    if (scaleUpHeld)   s += scalePerSec * dt;
+    if (scaleDownHeld) s -= scalePerSec * dt;
+
+    // clamp so it never goes invisible/negative
+    if (s < 0.1f) s = 0.1f;
+    if (s > 5.0f) s = 5.0f;
+
+    sprite->SetScale(s);
+}

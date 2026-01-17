@@ -1,4 +1,10 @@
-﻿#include "ZombieSystem.h"
+﻿// ZombieSystem.cpp (gold standard)
+// - Default: direct seek + separation
+// - Only when blocked by world/nav obstacle: enable short flow assist
+// - Always resolve movement with axis sliding (full, X-only, Y-only)
+// - Works well with 10k+ agents
+
+#include "ZombieSystem.h"
 #include "NavGrid.h"
 
 #include <cstdlib>
@@ -8,6 +14,51 @@
 static float Rand01()
 {
     return (float)std::rand() / (float)RAND_MAX;
+}
+
+// Axis-slide move resolver against NavGrid blocked cells.
+// Returns true if we moved (full or slide), false if completely blocked.
+static bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
+    const NavGrid& nav, bool& outFullBlocked)
+{
+    outFullBlocked = false;
+
+    const float startX = x;
+    const float startY = y;
+
+    // Full move
+    float nx = x + vx * dt;
+    float ny = y + vy * dt;
+    if (!nav.IsBlockedWorld(nx, ny))
+    {
+        x = nx; y = ny;
+        return true;
+    }
+
+    outFullBlocked = true;
+
+    // Slide X only
+    nx = x + vx * dt;
+    ny = y;
+    if (!nav.IsBlockedWorld(nx, ny))
+    {
+        x = nx;
+        // If vx was ~0, this "move" can be basically nothing
+        float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
+        return moved2 > 0.0001f;
+    }
+
+    // Slide Y only
+    nx = x;
+    ny = y + vy * dt;
+    if (!nav.IsBlockedWorld(nx, ny))
+    {
+        y = ny;
+        float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
+        return moved2 > 0.0001f;
+    }
+
+    return false;
 }
 
 void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
@@ -27,18 +78,18 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     attackCooldownMs.resize(maxCount);
     hp.resize(maxCount);
 
-    // NEW: per-zombie "use flow for a short burst" timer
+    // Per-zombie "use flow for a short burst" timer
     flowAssistMs.resize(maxCount);
 
     InitTypeStats();
 
-    // --- Copy world bounds from NavGrid (single source of truth) ---
+    // Copy world bounds from NavGrid (single source of truth)
     worldMinX = nav.WorldMinX();
     worldMinY = nav.WorldMinY();
     worldMaxX = nav.WorldMaxX();
     worldMaxY = nav.WorldMaxY();
 
-    // --- Separation grid uses its own cellSize (keep this independent) ---
+    // Separation grid uses ZombieSystem cellSize (independent from nav cellSize)
     gridW = (int)((worldMaxX - worldMinX) / cellSize) + 1;
     gridH = (int)((worldMaxY - worldMinY) / cellSize) + 1;
 
@@ -135,7 +186,6 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
         attackCooldownMs[i] = 0.f;
         hp[i] = typeStats[t].maxHP;
 
-        // NEW
         flowAssistMs[i] = 0.0f;
     }
 }
@@ -156,7 +206,6 @@ void ZombieSystem::Kill(int index)
         attackCooldownMs[index] = attackCooldownMs[last];
         hp[index] = hp[last];
 
-        // NEW
         flowAssistMs[index] = flowAssistMs[last];
     }
     aliveCount--;
@@ -182,10 +231,9 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
     const float sepRadiusSq = sepRadius * sepRadius;
 
     // Flow assist tuning
-    const float flowAssistBurstMs = 300.0f; // how long to follow flow after hitting wall
-    const float flowWeight = 0.80f;         // blend weight when flow assist active
+    const float flowAssistBurstMs = 300.0f; // 0.2-0.4s feels good
+    const float flowWeight = 0.75f;         // blend weight when assist is active
 
-    // swap-remove safe loop
     for (int i = 0; i < aliveCount; )
     {
         // Timers
@@ -201,7 +249,6 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
             if (attackCooldownMs[i] < 0.f) attackCooldownMs[i] = 0.f;
         }
 
-        // NEW: flow assist timer
         if (flowAssistMs[i] > 0.f)
         {
             flowAssistMs[i] -= deltaTimeMs;
@@ -211,7 +258,7 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         const uint8_t t = type[i];
         const ZombieTypeStats& s = typeStats[t];
 
-        // Dist to player (used for LOD + despawn)
+        // Dist to player (LOD + despawn)
         float toPX = playerX - posX[i];
         float toPY = playerY - posY[i];
         float distSqToPlayer = toPX * toPX + toPY * toPY;
@@ -250,82 +297,78 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
-            posX[i] += velX[i] * dt;
-            posY[i] += velY[i] * dt;
+            // Use same resolver so feared zombies also slide cleanly
+            bool fullBlocked = false;
+            bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
             i++;
             continue;
         }
+
+        // Default: direct seek
+        dx = toPX;
+        dy = toPY;
+
+        float lenSq = dx * dx + dy * dy;
+        if (lenSq > 0.0001f)
+        {
+            float invLen = 1.0f / std::sqrt(lenSq);
+            dx *= invLen;
+            dy *= invLen;
+        }
         else
         {
-            // BASE MOVE: direct seek (your "flowy base" behavior)
-            dx = toPX;
-            dy = toPY;
+            dx = 0.0f;
+            dy = 0.0f;
+        }
 
-            float lenSq = dx * dx + dy * dy;
-            if (lenSq > 0.0001f)
+        // If assist active, blend in nav flow
+        if (flowAssistMs[i] > 0.0f)
+        {
+            int navCell = nav.CellIndex(posX[i], posY[i]);
+            float fx = nav.FlowXAtCell(navCell);
+            float fy = nav.FlowYAtCell(navCell);
+
+            float f2 = fx * fx + fy * fy;
+            if (f2 > 0.0001f)
             {
-                float invLen = 1.0f / std::sqrt(lenSq);
-                dx *= invLen;
-                dy *= invLen;
-            }
-            else
-            {
-                dx = 0.0f;
-                dy = 0.0f;
-            }
+                dx = dx * (1.0f - flowWeight) + fx * flowWeight;
+                dy = dy * (1.0f - flowWeight) + fy * flowWeight;
 
-            // If next step would go into a blocked nav cell, enable flow assist burst
-            float nextX = posX[i] + dx * s.maxSpeed * dt;
-            float nextY = posY[i] + dy * s.maxSpeed * dt;
-
-            if (nav.IsBlockedWorld(nextX, nextY))
-            {
-                flowAssistMs[i] = flowAssistBurstMs;
-            }
-
-            // If flow assist active, steer using nav flow field (blended)
-            if (flowAssistMs[i] > 0.0f)
-            {
-                int navCell = nav.CellIndex(posX[i], posY[i]);
-                float fx = nav.FlowXAtCell(navCell);
-                float fy = nav.FlowYAtCell(navCell);
-
-                float f2 = fx * fx + fy * fy;
-                if (f2 > 0.0001f)
+                float d2 = dx * dx + dy * dy;
+                if (d2 > 0.0001f)
                 {
-                    dx = dx * (1.0f - flowWeight) + fx * flowWeight;
-                    dy = dy * (1.0f - flowWeight) + fy * flowWeight;
-
-                    float d2 = dx * dx + dy * dy;
-                    if (d2 > 0.0001f)
-                    {
-                        float invD = 1.0f / std::sqrt(d2);
-                        dx *= invD;
-                        dy *= invD;
-                    }
-                    else
-                    {
-                        dx = 0.0f;
-                        dy = 0.0f;
-                    }
+                    float invD = 1.0f / std::sqrt(d2);
+                    dx *= invD;
+                    dy *= invD;
                 }
                 else
                 {
-                    // No usable flow here, stop assisting
-                    flowAssistMs[i] = 0.0f;
+                    dx = 0.0f;
+                    dy = 0.0f;
                 }
+            }
+            else
+            {
+                // No usable flow here, stop assisting
+                flowAssistMs[i] = 0.0f;
             }
         }
 
-        // SIM LOD: far away = no separation
+        // LOD: far away = no separation
         if (distSqToPlayer > sepActiveRadiusSq)
         {
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
-            posX[i] += velX[i] * dt;
-            posY[i] += velY[i] * dt;
+            bool fullBlocked = false;
+            bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+
+            if (fullBlocked)
+                flowAssistMs[i] = flowAssistBurstMs;
+
+            if (!moved)
+                flowAssistMs[i] = flowAssistBurstMs;
 
             i++;
             continue;
@@ -396,19 +439,14 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         velX[i] = vx * s.maxSpeed;
         velY[i] = vy * s.maxSpeed;
 
-        // FINAL MOVE: if would step into blocked cell, re-trigger flow assist and skip this move
-        // (prevents "pushing into wall forever")
-        float finalNextX = posX[i] + velX[i] * dt;
-        float finalNextY = posY[i] + velY[i] * dt;
-        if (!nav.IsBlockedWorld(finalNextX, finalNextY))
-        {
-            posX[i] = finalNextX;
-            posY[i] = finalNextY;
-        }
-        else
-        {
+        bool fullBlocked = false;
+        bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+
+        if (fullBlocked)
             flowAssistMs[i] = flowAssistBurstMs;
-        }
+
+        if (!moved)
+            flowAssistMs[i] = flowAssistBurstMs;
 
         i++;
     }
@@ -438,6 +476,7 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
 void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
 {
     g = r = b = p = 0;
+
     for (int i = 0; i < aliveCount; i++)
     {
         switch (type[i])

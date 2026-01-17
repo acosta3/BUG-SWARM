@@ -42,7 +42,10 @@ int InputSystem::FindActivePadIndex() const
             p.CheckButton(App::BTN_X, false) ||
             p.CheckButton(App::BTN_Y, false) ||
             p.CheckButton(App::BTN_START, false) ||
-            p.CheckButton(App::BTN_BACK, false);
+            p.CheckButton(App::BTN_BACK, false) ||
+            p.CheckButton(App::BTN_DPAD_LEFT, false) ||
+            p.CheckButton(App::BTN_DPAD_RIGHT, false) ||
+            p.CheckButton(App::BTN_DPAD_DOWN, false);
 
         if (anyStick || anyTrig || anyButton)
             return i;
@@ -67,7 +70,7 @@ void InputSystem::Update(float dt)
     float sx = pad.GetLeftThumbStickX();
     float sy = pad.GetLeftThumbStickY();
 
-    const float DEAD = 0.2f;
+    const float DEAD = 0.5f;
     if (std::fabs(sx) < DEAD) sx = 0.0f;
     if (std::fabs(sy) < DEAD) sy = 0.0f;
 
@@ -110,4 +113,13 @@ void InputSystem::Update(float dt)
     state.meteorPressed = (eNow && !prevE);
     prevE = eNow;
     state.meteorPressed = state.meteorPressed || pad.CheckButton(App::BTN_Y, true);
+
+
+    // Scale controls: DPad Right/Left OR keyboard arrows (held)
+    const bool rightNow = App::IsKeyPressed(App::KEY_RIGHT);
+    const bool leftNow = App::IsKeyPressed(App::KEY_LEFT);
+
+    state.scaleUpHeld = rightNow || pad.CheckButton(App::BTN_RBUMPER, false);
+    state.scaleDownHeld = leftNow || pad.CheckButton(App::BTN_LBUMPER, false);
+
 }

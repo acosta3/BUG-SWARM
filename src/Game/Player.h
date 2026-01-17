@@ -15,6 +15,9 @@ public:
 
     void GetWorldPosition(float& outX, float& outY) const;
 
+    void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
+
+
 private:
     std::unique_ptr<CSimpleSprite> sprite;
     float speedPixelsPerSec = 200.0f;

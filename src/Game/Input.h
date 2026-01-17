@@ -13,6 +13,13 @@ struct InputState
     bool pulsePressed = false;   // Space / B
     bool slashPressed = false;   // Q (or Shift) / X
     bool meteorPressed = false;  // E / Y
+
+
+    // Debug / test controls (held)
+    bool scaleUpHeld = false;    // DPad Right
+    bool scaleDownHeld = false;  // DPad Left
+
+
 };
 
 class InputSystem

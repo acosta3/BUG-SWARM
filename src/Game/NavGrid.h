@@ -25,6 +25,7 @@ public:
         return IsBlockedCell(CellIndex(x, y));
     }
 
+
     float FlowXAtCell(int cellIndex) const { return flowX[cellIndex]; }
     float FlowYAtCell(int cellIndex) const { return flowY[cellIndex]; }
 
