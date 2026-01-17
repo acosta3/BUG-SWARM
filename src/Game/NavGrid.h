@@ -20,6 +20,10 @@ public:
     // Queries
     int   CellIndex(float x, float y) const;
     bool  IsBlockedCell(int cellIndex) const { return blocked[cellIndex] != 0; }
+    bool IsBlockedWorld(float x, float y) const
+    {
+        return IsBlockedCell(CellIndex(x, y));
+    }
 
     float FlowXAtCell(int cellIndex) const { return flowX[cellIndex]; }
     float FlowYAtCell(int cellIndex) const { return flowY[cellIndex]; }

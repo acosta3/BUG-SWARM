@@ -10,8 +10,6 @@ static float Rand01()
     return (float)std::rand() / (float)RAND_MAX;
 }
 
-
-
 void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
 {
     maxCount = maxZombies;
@@ -29,12 +27,14 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     attackCooldownMs.resize(maxCount);
     hp.resize(maxCount);
 
+    // NEW: per-zombie "use flow for a short burst" timer
+    flowAssistMs.resize(maxCount);
+
     InitTypeStats();
 
     // --- Copy world bounds from NavGrid (single source of truth) ---
     worldMinX = nav.WorldMinX();
     worldMinY = nav.WorldMinY();
-    // You don't have WorldMax getters yet, add them (see below)
     worldMaxX = nav.WorldMaxX();
     worldMaxY = nav.WorldMaxY();
 
@@ -47,7 +47,6 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     writeCursor.resize(gridW * gridH + 1);
     cellList.resize(maxCount);
 }
-
 
 void ZombieSystem::InitTypeStats()
 {
@@ -135,6 +134,9 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
         fearTimerMs[i] = 0.f;
         attackCooldownMs[i] = 0.f;
         hp[i] = typeStats[t].maxHP;
+
+        // NEW
+        flowAssistMs[i] = 0.0f;
     }
 }
 
@@ -153,6 +155,9 @@ void ZombieSystem::Kill(int index)
         fearTimerMs[index] = fearTimerMs[last];
         attackCooldownMs[index] = attackCooldownMs[last];
         hp[index] = hp[last];
+
+        // NEW
+        flowAssistMs[index] = flowAssistMs[last];
     }
     aliveCount--;
 }
@@ -176,6 +181,10 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
     const float sepRadius = 18.0f;
     const float sepRadiusSq = sepRadius * sepRadius;
 
+    // Flow assist tuning
+    const float flowAssistBurstMs = 300.0f; // how long to follow flow after hitting wall
+    const float flowWeight = 0.80f;         // blend weight when flow assist active
+
     // swap-remove safe loop
     for (int i = 0; i < aliveCount; )
     {
@@ -190,6 +199,13 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         {
             attackCooldownMs[i] -= deltaTimeMs;
             if (attackCooldownMs[i] < 0.f) attackCooldownMs[i] = 0.f;
+        }
+
+        // NEW: flow assist timer
+        if (flowAssistMs[i] > 0.f)
+        {
+            flowAssistMs[i] -= deltaTimeMs;
+            if (flowAssistMs[i] < 0.f) flowAssistMs[i] = 0.f;
         }
 
         const uint8_t t = type[i];
@@ -242,29 +258,62 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         }
         else
         {
-            // Normal seek uses NAV flow field (path around obstacles)
-            int navCell = nav.CellIndex(posX[i], posY[i]);
-            dx = nav.FlowXAtCell(navCell);
-            dy = nav.FlowYAtCell(navCell);
+            // BASE MOVE: direct seek (your "flowy base" behavior)
+            dx = toPX;
+            dy = toPY;
 
-            // If flow is zero (unreachable or already at target), fallback to direct seek
-            float flowLenSq = dx * dx + dy * dy;
-            if (flowLenSq < 0.0001f)
+            float lenSq = dx * dx + dy * dy;
+            if (lenSq > 0.0001f)
             {
-                dx = toPX;
-                dy = toPY;
+                float invLen = 1.0f / std::sqrt(lenSq);
+                dx *= invLen;
+                dy *= invLen;
+            }
+            else
+            {
+                dx = 0.0f;
+                dy = 0.0f;
+            }
 
-                float lenSq = dx * dx + dy * dy;
-                if (lenSq > 0.0001f)
+            // If next step would go into a blocked nav cell, enable flow assist burst
+            float nextX = posX[i] + dx * s.maxSpeed * dt;
+            float nextY = posY[i] + dy * s.maxSpeed * dt;
+
+            if (nav.IsBlockedWorld(nextX, nextY))
+            {
+                flowAssistMs[i] = flowAssistBurstMs;
+            }
+
+            // If flow assist active, steer using nav flow field (blended)
+            if (flowAssistMs[i] > 0.0f)
+            {
+                int navCell = nav.CellIndex(posX[i], posY[i]);
+                float fx = nav.FlowXAtCell(navCell);
+                float fy = nav.FlowYAtCell(navCell);
+
+                float f2 = fx * fx + fy * fy;
+                if (f2 > 0.0001f)
                 {
-                    float invLen = 1.0f / std::sqrt(lenSq);
-                    dx *= invLen;
-                    dy *= invLen;
+                    dx = dx * (1.0f - flowWeight) + fx * flowWeight;
+                    dy = dy * (1.0f - flowWeight) + fy * flowWeight;
+
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 > 0.0001f)
+                    {
+                        float invD = 1.0f / std::sqrt(d2);
+                        dx *= invD;
+                        dy *= invD;
+                    }
+                    else
+                    {
+                        dx = 0.0f;
+                        dy = 0.0f;
+                    }
                 }
                 else
                 {
-                    dx = 0.0f;
-                    dy = 0.0f;
+                    // No usable flow here, stop assisting
+                    flowAssistMs[i] = 0.0f;
                 }
             }
         }
@@ -347,8 +396,19 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const
         velX[i] = vx * s.maxSpeed;
         velY[i] = vy * s.maxSpeed;
 
-        posX[i] += velX[i] * dt;
-        posY[i] += velY[i] * dt;
+        // FINAL MOVE: if would step into blocked cell, re-trigger flow assist and skip this move
+        // (prevents "pushing into wall forever")
+        float finalNextX = posX[i] + velX[i] * dt;
+        float finalNextY = posY[i] + velY[i] * dt;
+        if (!nav.IsBlockedWorld(finalNextX, finalNextY))
+        {
+            posX[i] = finalNextX;
+            posY[i] = finalNextY;
+        }
+        else
+        {
+            flowAssistMs[i] = flowAssistBurstMs;
+        }
 
         i++;
     }
@@ -383,8 +443,8 @@ void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
         switch (type[i])
         {
         case GREEN: g++; break;
-        case RED: r++; break;
-        case BLUE: b++; break;
+        case RED:   r++; break;
+        case BLUE:  b++; break;
         case PURPLE_ELITE: p++; break;
         }
     }

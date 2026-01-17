@@ -111,6 +111,6 @@ public:
     float GetWorldMinX() const { return worldMinX; }
     float GetWorldMinY() const { return worldMinY; }
 
-    
+    std::vector<float> flowAssistMs;
 
 };

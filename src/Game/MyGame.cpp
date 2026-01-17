@@ -25,11 +25,11 @@ void MyGame::Init()
 
     // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
     zombies.Init(50000, nav);          // <-- if you changed Init signature
-    zombies.Spawn(1, px, py);
+    zombies.Spawn(100, px, py);
 
     // 5) Attacks last (depends on zombies + camera existing)
     attacks.Init();
-
+     
 }
 
 void MyGame::Update(float deltaTime)
@@ -80,7 +80,21 @@ void MyGame::Update(float deltaTime)
     attacks.Process(a, px, py, zombies, camera);
 
      
-     
+    // Update the flow field towards the player
+    
+    static int lastTargetCell = -1;
+    int curTargetCell = nav.CellIndex(px, py);
+
+    if (curTargetCell != lastTargetCell)
+    {
+        nav.BuildFlowField(px, py);
+        lastTargetCell = curTargetCell;
+    }
+
+
+
+    
+
     
     // Camera
     camera.Follow(px, py);
