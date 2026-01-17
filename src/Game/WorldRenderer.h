@@ -1,6 +1,4 @@
 #pragma once
-#include "../ContestAPI/app.h"
-#include "IsoProjector.h"
 
 // Forward declares to avoid heavy includes
 class Player;
@@ -19,15 +17,25 @@ public:
         bool densityView);
 
 private:
-    void RenderWorld(float offX, float offY, Player& player, const NavGrid& nav,
-        const ZombieSystem& zombies, bool densityView);
+    void RenderWorld(
+        float offX, float offY,
+        Player& player,
+        const NavGrid& nav,
+        const ZombieSystem& zombies,
+        bool densityView);
 
     void RenderZombies2D(float offX, float offY, const ZombieSystem& zombies, bool densityView);
-    void RenderZombiesIso(float offX, float offY, const ZombieSystem& zombies, bool densityView);
+    void RenderZombiesIso(float offX, float offY, const ZombieSystem& zombies, bool densityView, float playerX, float playerY);
 
-    void RenderUI(int simCount, int drawnCount, int step, bool densityView);
+
+    // NEW: UI now takes hp/maxHp
+    void RenderUI(int simCount, int drawnCount, int step, bool densityView, int hp, int maxHp);
 
     void DrawZombieTri(float x, float y, float size, float r, float g, float b, bool cull);
+
+    // NEW: 3D-ish iso wedge
+    void WorldRenderer::DrawIsoWedge(float sx, float sy, float size, float height, float r, float g, float b, float angleRad);
+
 
     static float Clamp01(float v);
 };

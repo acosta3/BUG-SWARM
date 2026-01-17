@@ -104,6 +104,8 @@ void MyGame::InitObstacles()
 
     // Bar
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
+
+	nav.ClearObstacles(); // issue is how my rectangle are colliding 
 }
 
 void MyGame::InitSystems()
