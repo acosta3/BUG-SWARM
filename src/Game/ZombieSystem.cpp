@@ -1,26 +1,42 @@
-﻿// ZombieSystem.cpp (gold standard + touch damage)
-// - Default: direct seek + separation
-// - Only when blocked by world/nav obstacle: enable short flow assist
-// - Always resolve movement with axis sliding (full, X-only, Y-only)
-// - Adds: touch damage (cooldown-gated) returned as damageThisFrame
-// - Works well with 10k+ agents
-
-#include "ZombieSystem.h"
+﻿#include "ZombieSystem.h"
 #include "NavGrid.h"
 
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
 
+// -------------------- small utilities --------------------
 static float Rand01()
 {
     return (float)std::rand() / (float)RAND_MAX;
 }
 
-// Axis-slide move resolver against NavGrid blocked cells.
-// Returns true if we moved (full or slide), false if completely blocked.
-static bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
-    const NavGrid& nav, bool& outFullBlocked)
+float ZombieSystem::Clamp01(float v)
+{
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+void ZombieSystem::NormalizeSafe(float& x, float& y)
+{
+    const float len2 = x * x + y * y;
+    if (len2 > 0.0001f)
+    {
+        const float inv = 1.0f / std::sqrt(len2);
+        x *= inv;
+        y *= inv;
+    }
+    else
+    {
+        x = 0.0f;
+        y = 0.0f;
+    }
+}
+
+// -------------------- movement (axis slide) --------------------
+bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
+    const NavGrid& nav, bool& outFullBlocked) const
 {
     outFullBlocked = false;
 
@@ -44,7 +60,7 @@ static bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
     if (!nav.IsBlockedWorld(nx, ny))
     {
         x = nx;
-        float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
+        const float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
         return moved2 > 0.0001f;
     }
 
@@ -54,13 +70,14 @@ static bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
     if (!nav.IsBlockedWorld(nx, ny))
     {
         y = ny;
-        float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
+        const float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
         return moved2 > 0.0001f;
     }
 
     return false;
 }
 
+// -------------------- init --------------------
 void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
 {
     maxCount = maxZombies;
@@ -78,7 +95,6 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     attackCooldownMs.resize(maxCount);
     hp.resize(maxCount);
 
-    // Per-zombie "use flow for a short burst" timer
     flowAssistMs.resize(maxCount);
 
     InitTypeStats();
@@ -109,14 +125,14 @@ void ZombieSystem::InitTypeStats()
 
 uint8_t ZombieSystem::RollTypeWeighted() const
 {
-    float r = Rand01();
+    const float r = Rand01();
     if (r < 0.70f) return GREEN;
     if (r < 0.90f) return RED;
     if (r < 0.99f) return BLUE;
     return PURPLE_ELITE;
 }
 
-// Separation grid cell index (ZombieSystem-owned grid)
+// -------------------- grid --------------------
 int ZombieSystem::CellIndex(float x, float y) const
 {
     int cx = (int)((x - worldMinX) / cellSize);
@@ -136,7 +152,7 @@ void ZombieSystem::BuildGrid()
 
     for (int i = 0; i < aliveCount; i++)
     {
-        int c = CellIndex(posX[i], posY[i]);
+        const int c = CellIndex(posX[i], posY[i]);
         cellCount[c]++;
     }
 
@@ -149,12 +165,13 @@ void ZombieSystem::BuildGrid()
 
     for (int i = 0; i < aliveCount; i++)
     {
-        int c = CellIndex(posX[i], posY[i]);
-        int dst = writeCursor[c]++;
+        const int c = CellIndex(posX[i], posY[i]);
+        const int dst = writeCursor[c]++;
         cellList[dst] = i;
     }
 }
 
+// -------------------- lifecycle --------------------
 void ZombieSystem::Clear()
 {
     aliveCount = 0;
@@ -167,11 +184,11 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
 
     for (int k = 0; k < count && aliveCount < maxCount; k++)
     {
-        int i = aliveCount++;
-        uint8_t t = RollTypeWeighted();
+        const int i = aliveCount++;
+        const uint8_t t = RollTypeWeighted();
 
-        float ang = Rand01() * 6.2831853f;
-        float r = minR + (maxR - minR) * Rand01();
+        const float ang = Rand01() * 6.2831853f;
+        const float r = minR + (maxR - minR) * Rand01();
 
         posX[i] = playerX + std::cos(ang) * r;
         posY[i] = playerY + std::sin(ang) * r;
@@ -192,7 +209,7 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
 
 void ZombieSystem::Kill(int index)
 {
-    int last = aliveCount - 1;
+    const int last = aliveCount - 1;
     if (index != last)
     {
         posX[index] = posX[last];
@@ -202,6 +219,7 @@ void ZombieSystem::Kill(int index)
 
         type[index] = type[last];
         state[index] = state[last];
+
         fearTimerMs[index] = fearTimerMs[last];
         attackCooldownMs[index] = attackCooldownMs[last];
         hp[index] = hp[last];
@@ -211,9 +229,121 @@ void ZombieSystem::Kill(int index)
     aliveCount--;
 }
 
-// Returns: total touch-damage dealt to the player this frame.
-// NOTE: You must update ZombieSystem.h signature to match:
-// int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
+// -------------------- per-frame helpers --------------------
+void ZombieSystem::TickTimers(int i, float deltaTimeMs)
+{
+    if (fearTimerMs[i] > 0.f)
+    {
+        fearTimerMs[i] -= deltaTimeMs;
+        if (fearTimerMs[i] < 0.f) fearTimerMs[i] = 0.f;
+    }
+
+    if (attackCooldownMs[i] > 0.f)
+    {
+        attackCooldownMs[i] -= deltaTimeMs;
+        if (attackCooldownMs[i] < 0.f) attackCooldownMs[i] = 0.f;
+    }
+
+    if (flowAssistMs[i] > 0.f)
+    {
+        flowAssistMs[i] -= deltaTimeMs;
+        if (flowAssistMs[i] < 0.f) flowAssistMs[i] = 0.f;
+    }
+}
+
+void ZombieSystem::ApplyTouchDamage(int i, const ZombieTypeStats& s,
+    float distSqToPlayer, float hitDistSq, int& outDamage)
+{
+    if (attackCooldownMs[i] <= 0.0f && distSqToPlayer <= hitDistSq)
+    {
+        outDamage += (int)s.touchDamage;
+        attackCooldownMs[i] = s.attackCooldownMs;
+    }
+}
+
+void ZombieSystem::ComputeSeekDir(int i, float playerX, float playerY, float& outDX, float& outDY) const
+{
+    outDX = playerX - posX[i];
+    outDY = playerY - posY[i];
+    NormalizeSafe(outDX, outDY);
+}
+
+void ZombieSystem::ComputeFleeDir(int i, float playerX, float playerY, float& outDX, float& outDY) const
+{
+    outDX = posX[i] - playerX;
+    outDY = posY[i] - playerY;
+    NormalizeSafe(outDX, outDY);
+}
+
+void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioDX, float& ioDY) const
+{
+    if (flowAssistMs[i] <= 0.0f) return;
+
+    const float flowWeight = tuning.flowWeight;
+
+    const int navCell = nav.CellIndex(posX[i], posY[i]);
+    const float fx = nav.FlowXAtCell(navCell);
+    const float fy = nav.FlowYAtCell(navCell);
+
+    const float f2 = fx * fx + fy * fy;
+    if (f2 <= 0.0001f)
+        return;
+
+    ioDX = ioDX * (1.0f - flowWeight) + fx * flowWeight;
+    ioDY = ioDY * (1.0f - flowWeight) + fy * flowWeight;
+    NormalizeSafe(ioDX, ioDY);
+}
+
+void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) const
+{
+    outSepX = 0.0f;
+    outSepY = 0.0f;
+
+    const float sepRadius = tuning.sepRadius;
+    const float sepRadiusSq = sepRadius * sepRadius;
+
+    const int c = CellIndex(posX[i], posY[i]);
+    const int cx = c % gridW;
+    const int cy = c / gridW;
+
+    for (int oy = -1; oy <= 1; oy++)
+    {
+        const int ny = cy + oy;
+        if (ny < 0 || ny >= gridH) continue;
+
+        for (int ox = -1; ox <= 1; ox++)
+        {
+            const int nx = cx + ox;
+            if (nx < 0 || nx >= gridW) continue;
+
+            const int nc = ny * gridW + nx;
+            const int start = cellStart[nc];
+            const int end = cellStart[nc + 1];
+
+            for (int k = start; k < end; k++)
+            {
+                const int j = cellList[k];
+                if (j == i) continue;
+
+                const float ax = posX[i] - posX[j];
+                const float ay = posY[i] - posY[j];
+                const float d2 = ax * ax + ay * ay;
+
+                if (d2 > 0.0001f && d2 < sepRadiusSq)
+                {
+                    const float d = std::sqrt(d2);
+                    const float invD = 1.0f / d;
+
+                    const float push = (sepRadius - d) / sepRadius;
+                    outSepX += ax * invD * push;
+                    outSepY += ay * invD * push;
+                }
+            }
+        }
+    }
+}
+
+// -------------------- update --------------------
 int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
     const float dt = deltaTimeMs / 1000.0f;
@@ -221,101 +351,44 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
 
     int damageThisFrame = 0;
 
-    // Touch hit tuning (match your player collision size)
-    const float playerRadius = 16.0f;
-    const float zombieRadius = 14.0f;
-    const float hitDist = playerRadius + zombieRadius;
+    const float hitDist = tuning.playerRadius + tuning.zombieRadius;
     const float hitDistSq = hitDist * hitDist;
 
-    BuildGrid(); // separation grid, once per frame
+    const float sepActiveRadiusSq = tuning.sepActiveRadius * tuning.sepActiveRadius;
+    const float fleeDespawnRadiusSq = tuning.fleeDespawnRadius * tuning.fleeDespawnRadius;
 
-    // SIM LOD: only do separation near player
-    const float sepActiveRadius = 600.0f;
-    const float sepActiveRadiusSq = sepActiveRadius * sepActiveRadius;
-
-    // Fear despawn
-    const float fleeDespawnRadius = 1200.0f;
-    const float fleeDespawnRadiusSq = fleeDespawnRadius * fleeDespawnRadius;
-
-    // Separation
-    const float sepRadius = 18.0f;
-    const float sepRadiusSq = sepRadius * sepRadius;
-
-    // Flow assist tuning
-    const float flowAssistBurstMs = 300.0f; // 0.2-0.4s feels good
-    const float flowWeight = 0.75f;         // blend weight when assist is active
+    BuildGrid();
 
     for (int i = 0; i < aliveCount; )
     {
-        // Timers
-        if (fearTimerMs[i] > 0.f)
-        {
-            fearTimerMs[i] -= deltaTimeMs;
-            if (fearTimerMs[i] < 0.f) fearTimerMs[i] = 0.f;
-        }
+        TickTimers(i, deltaTimeMs);
 
-        if (attackCooldownMs[i] > 0.f)
-        {
-            attackCooldownMs[i] -= deltaTimeMs;
-            if (attackCooldownMs[i] < 0.f) attackCooldownMs[i] = 0.f;
-        }
+        const uint8_t zt = type[i];
+        const ZombieTypeStats& s = typeStats[zt];
 
-        if (flowAssistMs[i] > 0.f)
-        {
-            flowAssistMs[i] -= deltaTimeMs;
-            if (flowAssistMs[i] < 0.f) flowAssistMs[i] = 0.f;
-        }
-
-        const uint8_t t = type[i];
-        const ZombieTypeStats& s = typeStats[t];
-
-        // Dist to player (LOD + despawn + touch damage)
-        float toPX = playerX - posX[i];
-        float toPY = playerY - posY[i];
-        float distSqToPlayer = toPX * toPX + toPY * toPY;
+        const float toPX = playerX - posX[i];
+        const float toPY = playerY - posY[i];
+        const float distSqToPlayer = toPX * toPX + toPY * toPY;
 
         const bool feared = (fearTimerMs[i] > 0.0f);
 
-        // Touch damage (cooldown-gated)
-        if (attackCooldownMs[i] <= 0.0f && distSqToPlayer <= hitDistSq)
-        {
-            damageThisFrame += (int)s.touchDamage;
-            attackCooldownMs[i] = s.attackCooldownMs;
-        }
+        ApplyTouchDamage(i, s, distSqToPlayer, hitDistSq, damageThisFrame);
 
-        // Despawn if feared and far away
         if (feared && distSqToPlayer > fleeDespawnRadiusSq)
         {
             Kill(i);
             continue;
         }
 
-        float dx = 0.0f;
-        float dy = 0.0f;
-
+        // ---- feared: flee (no separation) ----
         if (feared)
         {
-            // Panic flee: run away from player (cheap)
-            dx = -toPX;
-            dy = -toPY;
-
-            float lenSq = dx * dx + dy * dy;
-            if (lenSq > 0.0001f)
-            {
-                float invLen = 1.0f / std::sqrt(lenSq);
-                dx *= invLen;
-                dy *= invLen;
-            }
-            else
-            {
-                dx = 0.0f;
-                dy = 0.0f;
-            }
+            float dx, dy;
+            ComputeFleeDir(i, playerX, playerY, dx, dy);
 
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
-            // Use same resolver so feared zombies also slide cleanly
             bool fullBlocked = false;
             (void)ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
@@ -323,142 +396,43 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
             continue;
         }
 
-        // Default: direct seek
-        dx = toPX;
-        dy = toPY;
+        // ---- seek + optional flow assist ----
+        float dx, dy;
+        ComputeSeekDir(i, playerX, playerY, dx, dy);
+        ApplyFlowAssistIfActive(i, nav, dx, dy);
 
-        float lenSq = dx * dx + dy * dy;
-        if (lenSq > 0.0001f)
-        {
-            float invLen = 1.0f / std::sqrt(lenSq);
-            dx *= invLen;
-            dy *= invLen;
-        }
-        else
-        {
-            dx = 0.0f;
-            dy = 0.0f;
-        }
-
-        // If assist active, blend in nav flow
-        if (flowAssistMs[i] > 0.0f)
-        {
-            int navCell = nav.CellIndex(posX[i], posY[i]);
-            float fx = nav.FlowXAtCell(navCell);
-            float fy = nav.FlowYAtCell(navCell);
-
-            float f2 = fx * fx + fy * fy;
-            if (f2 > 0.0001f)
-            {
-                dx = dx * (1.0f - flowWeight) + fx * flowWeight;
-                dy = dy * (1.0f - flowWeight) + fy * flowWeight;
-
-                float d2 = dx * dx + dy * dy;
-                if (d2 > 0.0001f)
-                {
-                    float invD = 1.0f / std::sqrt(d2);
-                    dx *= invD;
-                    dy *= invD;
-                }
-                else
-                {
-                    dx = 0.0f;
-                    dy = 0.0f;
-                }
-            }
-            else
-            {
-                // No usable flow here, stop assisting
-                flowAssistMs[i] = 0.0f;
-            }
-        }
-
-        // LOD: far away = no separation
+        // ---- LOD: far away = no separation ----
         if (distSqToPlayer > sepActiveRadiusSq)
         {
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
             bool fullBlocked = false;
-            bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+            const bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
-            if (fullBlocked) flowAssistMs[i] = flowAssistBurstMs;
-            if (!moved)      flowAssistMs[i] = flowAssistBurstMs;
+            if (fullBlocked || !moved)
+                flowAssistMs[i] = tuning.flowAssistBurstMs;
 
             i++;
             continue;
         }
 
-        // Separation (grid neighbors)
-        float sepX = 0.0f;
-        float sepY = 0.0f;
+        // ---- separation ----
+        float sepX, sepY;
+        ComputeSeparation(i, sepX, sepY);
 
-        int c = CellIndex(posX[i], posY[i]);
-        int cx = c % gridW;
-        int cy = c / gridW;
-
-        for (int oy = -1; oy <= 1; oy++)
-        {
-            int ny = cy + oy;
-            if (ny < 0 || ny >= gridH) continue;
-
-            for (int ox = -1; ox <= 1; ox++)
-            {
-                int nx = cx + ox;
-                if (nx < 0 || nx >= gridW) continue;
-
-                int nc = ny * gridW + nx;
-                int start = cellStart[nc];
-                int end = cellStart[nc + 1];
-
-                for (int k = start; k < end; k++)
-                {
-                    int j = cellList[k];
-                    if (j == i) continue;
-
-                    float ax = posX[i] - posX[j];
-                    float ay = posY[i] - posY[j];
-                    float d2 = ax * ax + ay * ay;
-
-                    if (d2 > 0.0001f && d2 < sepRadiusSq)
-                    {
-                        float d = std::sqrt(d2);
-                        float invD = 1.0f / d;
-
-                        float push = (sepRadius - d) / sepRadius;
-                        sepX += ax * invD * push;
-                        sepY += ay * invD * push;
-                    }
-                }
-            }
-        }
-
-        // Combine seek + separation
         float vx = dx * s.seekWeight + sepX * s.sepWeight;
         float vy = dy * s.seekWeight + sepY * s.sepWeight;
-
-        // Normalize final direction
-        float v2 = vx * vx + vy * vy;
-        if (v2 > 0.0001f)
-        {
-            float invV = 1.0f / std::sqrt(v2);
-            vx *= invV;
-            vy *= invV;
-        }
-        else
-        {
-            vx = 0.0f;
-            vy = 0.0f;
-        }
+        NormalizeSafe(vx, vy);
 
         velX[i] = vx * s.maxSpeed;
         velY[i] = vy * s.maxSpeed;
 
         bool fullBlocked = false;
-        bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+        const bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
-        if (fullBlocked) flowAssistMs[i] = flowAssistBurstMs;
-        if (!moved)      flowAssistMs[i] = flowAssistBurstMs;
+        if (fullBlocked || !moved)
+            flowAssistMs[i] = tuning.flowAssistBurstMs;
 
         i++;
     }
@@ -466,6 +440,7 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     return damageThisFrame;
 }
 
+// -------------------- fear + counts --------------------
 void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float durationMs)
 {
     const float r2 = radius * radius;
@@ -475,9 +450,9 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
         if (type[i] == PURPLE_ELITE)
             continue;
 
-        float dx = posX[i] - sourceX;
-        float dy = posY[i] - sourceY;
-        float d2 = dx * dx + dy * dy;
+        const float dx = posX[i] - sourceX;
+        const float dy = posY[i] - sourceY;
+        const float d2 = dx * dx + dy * dy;
 
         if (d2 <= r2)
         {

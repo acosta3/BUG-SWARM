@@ -2,7 +2,7 @@
 #include <vector>
 #include <cstdint>
 
-class NavGrid; // forward declare (include NavGrid.h in .cpp)
+class NavGrid;
 
 struct ZombieTypeStats
 {
@@ -15,6 +15,30 @@ struct ZombieTypeStats
     float    attackCooldownMs;
 
     float fearRadius;
+};
+
+// Central place for all "magic numbers"
+struct ZombieTuning
+{
+    // Touch damage collision sizes
+    float playerRadius = 16.0f;
+    float zombieRadius = 14.0f;
+
+    // Separation LOD (only separate when close to player)
+    float sepActiveRadius = 600.0f;
+
+    // Separation force radius
+    float sepRadius = 18.0f;
+
+    // Fear behavior (despawn when far away)
+    float fleeDespawnRadius = 1200.0f;
+
+    // Flow assist behavior
+    float flowAssistBurstMs = 300.0f;
+    float flowWeight = 0.75f;
+
+    // Density render tuning (visual only)
+    float densityDenom = 20.0f;
 };
 
 class ZombieSystem
@@ -35,39 +59,80 @@ public:
         FLEE
     };
 
-
+public:
     void Init(int maxZombies, const NavGrid& nav);
     void Clear();
 
     void Spawn(int count, float playerX, float playerY);
     void Kill(int index);
 
-    // Uses nav flow-field for seek (obstacles), and ZombieSystem grid for separation
+    // Returns damage dealt to player this frame
     int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
 
-    // Fear API
     void TriggerFear(float sourceX, float sourceY, float radius, float durationMs);
 
-    // Counts / accessors
+public:
+    // Accessors
     int AliveCount() const { return aliveCount; }
 
-    float GetX(int i) const { return posX[i]; }
-    float GetY(int i) const { return posY[i]; }
+    float   GetX(int i) const { return posX[i]; }
+    float   GetY(int i) const { return posY[i]; }
     uint8_t GetType(int i) const { return type[i]; }
+
+    bool IsFeared(int i) const { return fearTimerMs[i] > 0.0f; }
 
     void GetTypeCounts(int& g, int& r, int& b, int& p) const;
 
+public:
     // Density view helpers
     int GetCellCountAt(int cellIndex) const { return cellCount[cellIndex]; }
+    int GetGridW() const { return gridW; }
+    int GetGridH() const { return gridH; }
+    float GetCellSize() const { return cellSize; }
+    float GetWorldMinX() const { return worldMinX; }
+    float GetWorldMinY() const { return worldMinY; }
 
-    // Render tint helper
-    bool IsFeared(int i) const { return fearTimerMs[i] > 0.0f; }
+public:
+    // Optional: tweak tuning at runtime (nice for balancing)
+    ZombieTuning& GetTuning() { return tuning; }
+    const ZombieTuning& GetTuning() const { return tuning; }
+
+private:
+    // ---- Init helpers ----
+    void InitTypeStats();
+    uint8_t RollTypeWeighted() const;
+
+    // ---- Grid helpers ----
+    int  CellIndex(float x, float y) const;
+    void BuildGrid();
+
+    // ---- Per-frame helpers ----
+    void TickTimers(int i, float deltaTimeMs);
+    void ApplyTouchDamage(int i, const ZombieTypeStats& s, float distSqToPlayer, float hitDistSq, int& outDamage);
+
+    // Steering
+    void ComputeSeekDir(int i, float playerX, float playerY, float& outDX, float& outDY) const;
+    void ComputeFleeDir(int i, float playerX, float playerY, float& outDX, float& outDY) const;
+    void ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioDX, float& ioDY) const;
+
+    // Separation
+    void ComputeSeparation(int i, float& outSepX, float& outSepY) const;
+
+    // Movement
+    bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt, const NavGrid& nav, bool& outFullBlocked) const;
+
+    // Utility
+    static void NormalizeSafe(float& x, float& y);
+    static float Clamp01(float v);
+
+private:
+    ZombieTuning tuning;
 
 private:
     int maxCount = 0;
     int aliveCount = 0;
 
-    // SoA storage
+    // ---- SoA storage ----
     std::vector<float> posX, posY;
     std::vector<float> velX, velY;
 
@@ -78,19 +143,16 @@ private:
     std::vector<float> attackCooldownMs;
     std::vector<uint16_t> hp;
 
+    std::vector<float> flowAssistMs;
+
     ZombieTypeStats typeStats[ZTYPE_COUNT];
 
 private:
-    void InitTypeStats();
-    uint8_t RollTypeWeighted() const;
-
-private:
-    // --- Separation spatial grid (ZombieSystem-owned) ---
+    // ---- Separation spatial grid ----
     float cellSize = 40.0f;
     int gridW = 0;
     int gridH = 0;
 
-    // world bounds for separation grid
     float worldMinX = -5000.0f;
     float worldMinY = -5000.0f;
     float worldMaxX = 5000.0f;
@@ -100,17 +162,4 @@ private:
     std::vector<int> cellCount;   // size = gridW*gridH
     std::vector<int> cellList;    // size = maxCount
     std::vector<int> writeCursor; // size = gridW*gridH + 1
-
-    int  CellIndex(float x, float y) const;
-    void BuildGrid();
-public:
-    // --- Density view helpers (read-only) ---
-    int   GetGridW() const { return gridW; }
-    int   GetGridH() const { return gridH; }
-    float GetCellSize() const { return cellSize; }
-    float GetWorldMinX() const { return worldMinX; }
-    float GetWorldMinY() const { return worldMinY; }
-
-    std::vector<float> flowAssistMs;
-
 };

@@ -1,26 +1,81 @@
 #include "MyGame.h"
 #include "../ContestAPI/app.h"
 #include <cstdio>
+#include <cmath>
 
+// ------------------------------------------------------------
+// Public API
+// ------------------------------------------------------------
 void MyGame::Init()
 {
-    // 1) Player first (so we can grab spawn position)
+    InitWorld();
+    InitObstacles();
+    InitSystems();
+}
+
+void MyGame::Update(float deltaTimeMs)
+{
+    UpdateInput(deltaTimeMs);
+
+    // If dead, keep camera stable (optional) and stop gameplay
+    if (player.IsDead())
+    {
+        float px, py;
+        player.GetWorldPosition(px, py);
+        UpdateCamera(deltaTimeMs, px, py);
+        return;
+    }
+
+    UpdatePlayer(deltaTimeMs);
+
+    float px, py;
+    player.GetWorldPosition(px, py);
+
+    UpdateAttacks(deltaTimeMs);
+    UpdateNavFlowField(px, py);
+    UpdateCamera(deltaTimeMs, px, py);
+    UpdateZombies(deltaTimeMs, px, py);
+}
+
+void MyGame::Render()
+{
+    const float offX = camera.GetOffsetX();
+    const float offY = camera.GetOffsetY();
+
+    RenderWorld(offX, offY);
+}
+
+void MyGame::Shutdown()
+{
+    // Nothing required right now:
+    // - Player owns sprite via unique_ptr
+    // - ZombieSystem uses vectors managed by RAII
+    // - InputSystem has no heap allocations
+}
+
+// ------------------------------------------------------------
+// Init helpers
+// ------------------------------------------------------------
+void MyGame::InitWorld()
+{
+    // Player first
     player.Init();
 
     float px, py;
     player.GetWorldPosition(px, py);
     player.SetNavGrid(&nav);
 
-    // 2) Camera next (so first frame is centered)
+    // Camera next
     camera.Init(1024.0f, 768.0f);
     camera.Follow(px, py);
 
-    // 3) NavGrid (world + obstacles) BEFORE zombies
-    nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f); // nav cell size can be bigger
+    // NavGrid before zombies
+    nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f);
     nav.ClearObstacles();
+}
 
-    // 20 small obstacles, spaced out (good for testing)
-
+void MyGame::InitObstacles()
+{
     // Row 1
     nav.AddObstacleRect(-420.0f, -260.0f, -380.0f, -220.0f);
     nav.AddObstacleCircle(-300.0f, -240.0f, 22.0f);
@@ -49,115 +104,164 @@ void MyGame::Init()
     nav.AddObstacleRect(-60.0f, 120.0f, -20.0f, 160.0f);
     nav.AddObstacleCircle(80.0f, 140.0f, 22.0f);
 
-
-
-    //nav.ClearObstacles();
+    // Bar
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
-    // nav.AddObstacleCircle(...);
-
-   
-
-
-    // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
-    zombies.Init(50000, nav);          // <-- if you changed Init signature
-    zombies.Spawn(10'000, px, py);
-
-    // 5) Attacks last (depends on zombies + camera existing)
-    attacks.Init();
-     
 }
 
-void MyGame::Update(float deltaTime)
+void MyGame::InitSystems()
 {
-    input.SetEnabled(!player.IsDead()); // controls if still not dead
-    input.Update(deltaTime);
-    const InputState& in = input.GetState();
-
-
-    
-    
-
-    // Toggle views
-    if (in.toggleViewPressed)
-        densityView = !densityView;
-
-    // Player movement
-    player.SetMoveInput(in.moveX, in.moveY);
-    player.Update(deltaTime);
-    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTime);
-
-    // Player position
     float px, py;
     player.GetWorldPosition(px, py);
 
-    // ATTACK
-    attacks.Update(deltaTime);
+    // Zombies AFTER nav (so zombies can copy world bounds from nav)
+    zombies.Init(50000, nav);
+    zombies.Spawn(10'000, px, py);
 
-    // Aim = movement direction, but keep last aim when idle
-    static float lastAimX = 0.0f;
-    static float lastAimY = 1.0f;
+    // Attacks last (depends on zombies + camera)
+    attacks.Init();
 
-    float aimX = in.moveX;
-    float aimY = in.moveY;
+    // Persistent state
+    lastAimX = 0.0f;
+    lastAimY = 1.0f;
+    lastTargetCell = -1;
+}
 
-    if (aimX * aimX + aimY * aimY > 0.0001f)
+// ------------------------------------------------------------
+// Update helpers
+// ------------------------------------------------------------
+void MyGame::UpdateInput(float deltaTimeMs)
+{
+    input.SetEnabled(!player.IsDead());
+    input.Update(deltaTimeMs);
+
+    const InputState& in = input.GetState();
+    if (in.toggleViewPressed)
+        densityView = !densityView;
+}
+
+void MyGame::UpdatePlayer(float deltaTimeMs)
+{
+    const InputState& in = input.GetState();
+
+    player.SetMoveInput(in.moveX, in.moveY);
+    player.Update(deltaTimeMs);
+    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTimeMs);
+
+    // Update last aim when moving
+    const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
+    if (len2 > 0.0001f)
     {
-        lastAimX = aimX;
-        lastAimY = aimY;
+        lastAimX = in.moveX;
+        lastAimY = in.moveY;
     }
-    else
-    {
-        aimX = lastAimX;
-        aimY = lastAimY;
-    }
+}
 
+AttackInput MyGame::BuildAttackInput(const InputState& in)
+{
     AttackInput a;
     a.pulsePressed = in.pulsePressed;
     a.slashPressed = in.slashPressed;
     a.meteorPressed = in.meteorPressed;
-    a.aimX = aimX;
-    a.aimY = aimY;
 
-    attacks.Process(a, px, py, zombies, camera);
-
-     
-    // Update the flow field towards the player
-    
-    static int lastTargetCell = -1;
-    int curTargetCell = nav.CellIndex(px, py);
-
-    if (curTargetCell != lastTargetCell)
+    // Aim: movement dir, but keep last aim when idle
+    const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
+    if (len2 > 0.0001f)
     {
-        nav.BuildFlowField(px, py);
-        lastTargetCell = curTargetCell;
+        a.aimX = in.moveX;
+        a.aimY = in.moveY;
+    }
+    else
+    {
+        a.aimX = lastAimX;
+        a.aimY = lastAimY;
     }
 
-
-
-    
-
-    
-    // Camera
-    camera.Follow(px, py);
-    camera.Update(deltaTime);
-
-    
-    int dmg = zombies.Update(deltaTime, px, py, nav);
-    if (dmg > 0) player.TakeDamage(dmg);
-
-   
-
+    return a;
 }
 
-
-void MyGame::Render()
+void MyGame::UpdateAttacks(float deltaTimeMs)
 {
-    const float offX = camera.GetOffsetX();
-    const float offY = camera.GetOffsetY();
+    attacks.Update(deltaTimeMs);
 
-    // World
+    float px, py;
+    player.GetWorldPosition(px, py);
+
+    const InputState& in = input.GetState();
+    const AttackInput a = BuildAttackInput(in);
+
+    attacks.Process(a, px, py, zombies, camera);
+}
+
+void MyGame::UpdateNavFlowField(float playerX, float playerY)
+{
+    const int curTargetCell = nav.CellIndex(playerX, playerY);
+    if (curTargetCell != lastTargetCell)
+    {
+        nav.BuildFlowField(playerX, playerY);
+        lastTargetCell = curTargetCell;
+    }
+}
+
+void MyGame::UpdateCamera(float deltaTimeMs, float playerX, float playerY)
+{
+    camera.Follow(playerX, playerY);
+    camera.Update(deltaTimeMs);
+}
+
+void MyGame::UpdateZombies(float deltaTimeMs, float playerX, float playerY)
+{
+    const int dmg = zombies.Update(deltaTimeMs, playerX, playerY, nav);
+    if (dmg > 0)
+        player.TakeDamage(dmg);
+}
+
+// ------------------------------------------------------------
+// Render helpers
+// ------------------------------------------------------------
+void MyGame::RenderWorld(float offX, float offY)
+{
     player.Render(offX, offY);
 
+    // Draw nav obstacles
+    nav.DebugDrawBlocked(offX, offY);
+
+    // Draw zombies
+    RenderZombies(offX, offY);
+
+    // UI
+    const int simCount = zombies.AliveCount();
+
+    // RenderZombies computes drawn + step, but UI wants them.
+    // Easiest is to recompute here with same rules, or store members.
+    // We'll recompute tiny values for UI by mirroring the logic.
+    int step = 1;
+    int drawn = 0;
+
+    if (densityView)
+    {
+        // Density mode: drawn is how many occupied cells we rendered
+        const int gw = zombies.GetGridW();
+        const int gh = zombies.GetGridH();
+        for (int cy = 0; cy < gh; cy++)
+            for (int cx = 0; cx < gw; cx++)
+                if (zombies.GetCellCountAt(cy * gw + cx) > 0) drawn++;
+    }
+    else
+    {
+        const int fullDrawThreshold = 50000;
+        const int maxDraw = 10000;
+        if (simCount > fullDrawThreshold)
+            step = (simCount + maxDraw - 1) / maxDraw;
+
+        // drawn in entity mode is approximate without culling; keep UI honest-ish:
+        drawn = (simCount + step - 1) / step;
+    }
+
+    RenderUI(simCount, drawn, step);
+}
+
+void MyGame::RenderZombies(float offX, float offY)
+{
     // Precomputed render data by type
     static const float sizeByType[4] = { 3.0f, 3.5f, 5.0f, 7.0f };
     static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
@@ -165,17 +269,6 @@ void MyGame::Render()
     static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
 
     const int count = zombies.AliveCount();
-
-    const int fullDrawThreshold = 50000;
-    const int maxDraw = 10000; // only used when count > threshold
-
-    int step = 1;
-    int drawn = 0;
-
-   
-    nav.DebugDrawBlocked(offX, offY); // render the map 
-    
-       
 
     if (densityView)
     {
@@ -185,8 +278,6 @@ void MyGame::Render()
         const float minX = zombies.GetWorldMinX();
         const float minY = zombies.GetWorldMinY();
 
-        // We only draw cells that are on-screen
-        // Each occupied cell becomes ONE triangle (or you can draw 2 for a quad)
         for (int cy = 0; cy < gh; cy++)
         {
             for (int cx = 0; cx < gw; cx++)
@@ -195,107 +286,90 @@ void MyGame::Render()
                 const int n = zombies.GetCellCountAt(idx);
                 if (n <= 0) continue;
 
-                // Cell world center
-                float worldX = minX + (cx + 0.5f) * cs;
-                float worldY = minY + (cy + 0.5f) * cs;
+                const float worldX = minX + (cx + 0.5f) * cs;
+                const float worldY = minY + (cy + 0.5f) * cs;
 
-                float x = worldX - offX;
-                float y = worldY - offY;
+                const float x = worldX - offX;
+                const float y = worldY - offY;
 
                 // Cull off-screen
                 if (x < 0.0f || x > 1024.0f || y < 0.0f || y > 768.0f)
                     continue;
 
-                // Intensity: map count -> 0..1
-                // Tune denom depending on how dense your swarm gets
-                const float denom = 20.0f; // 20 zombies in cell = full bright
-                float intensity = Clamp01((float)n / denom);
+                const float denom = 20.0f;
+                const float intensity = Clamp01((float)n / denom);
 
-                // Color: green to yellow to red style (simple)
-                float r = intensity;
-                float g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
-                float b = 0.1f;
+                const float r = intensity;
+                const float g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
+                const float b = 0.1f;
 
-                // Size: proportional to cell size (visual)
-                float size = cs * 0.45f;
-
+                const float size = cs * 0.45f;
                 DrawZombieTri(x, y, size, r, g, b);
-				drawn++;
             }
         }
+        return;
     }
-    else
+
+    // Entity view
+    const int fullDrawThreshold = 50000;
+    const int maxDraw = 10000;
+
+    int step = 1;
+    if (count > fullDrawThreshold)
+        step = (count + maxDraw - 1) / maxDraw;
+
+    for (int i = 0; i < count; i += step)
     {
-        // Your entity view loop (with maxDraw cap) goes here
-        if (count > fullDrawThreshold)
+        float x = zombies.GetX(i) - offX;
+        float y = zombies.GetY(i) - offY;
+
+        if (x < 0.0f || x > 1024.0f || y < 0.0f || y > 768.0f)
+            continue;
+
+        const int t = zombies.GetType(i);
+
+        float r = rByType[t];
+        float g = gByType[t];
+        float b = bByType[t];
+
+        if (zombies.IsFeared(i))
         {
-            // sample so we draw about maxDraw
-            step = (count + maxDraw - 1) / maxDraw;
+            r = 1.0f;
+            if (g < 0.85f) g = 0.85f;
+            b *= 0.25f;
         }
 
-        
-        for (int i = 0; i < count; i += step)
-        {
-            float x = zombies.GetX(i) - offX;
-            float y = zombies.GetY(i) - offY;
-
-            if (x < 0.0f || x > 1024.0f || y < 0.0f || y > 768.0f)
-                continue;
-
-            int t = zombies.GetType(i);
-            float r = rByType[t];
-            float g = gByType[t];
-            float b = bByType[t];
-
-            if (zombies.IsFeared(i))
-            {
-                r = 1.0f;
-                if (g < 0.85f) g = 0.85f;
-                b *= 0.25f;
-            }
-            DrawZombieTri(x, y, sizeByType[t], rByType[t], gByType[t], bByType[t]);
-            drawn++;
-        }
+        // IMPORTANT: pass the modified (r,g,b), not the base arrays
+        DrawZombieTri(x, y, sizeByType[t], r, g, b);
     }
+}
 
-   
-
-    // UI: show both sim and draw counts
-
+void MyGame::RenderUI(int simCount, int drawnCount, int step)
+{
     App::Print(20, 60, densityView ? "View: Density (V/X)" : "View: Entities (V/X)");
 
     char buf2[96];
-    std::snprintf(buf2, sizeof(buf2), "Sim: %d  Draw: %d  Step: %d", count, drawn, step);
+    std::snprintf(buf2, sizeof(buf2), "Sim: %d  Draw: %d  Step: %d", simCount, drawnCount, step);
     App::Print(20, 40, buf2);
 
-    
     char bufHP[96];
-    std::snprintf(bufHP, sizeof(bufHP), "HP: %d/%d",
-        player.GetHealth(), player.GetMaxHealth());
+    std::snprintf(bufHP, sizeof(bufHP), "HP: %d/%d", player.GetHealth(), player.GetMaxHealth());
     App::Print(500, 40, bufHP);
-
-
 }
 
-
-void MyGame::Shutdown()
-{
-    // Nothing required right now:
-    // - Player owns sprite via unique_ptr
-    // - ZombieSystem uses vectors managed by RAII
-    // - InputSystem has no heap allocations
-}
-
+// ------------------------------------------------------------
+// Existing helpers you already had
+// ------------------------------------------------------------
 void MyGame::DrawZombieTri(float x, float y, float size, float r, float g, float b)
 {
-    float p1x = x;
-    float p1y = y - size;
+    const float p1x = x;
+    const float p1y = y - size;
 
-    float p2x = x - size;
-    float p2y = y + size;
+    const float p2x = x - size;
+    const float p2y = y + size;
 
-    float p3x = x + size;
-    float p3y = y + size;
+    const float p3x = x + size;
+    const float p3y = y + size;
 
     App::DrawTriangle(
         p1x, p1y, 0.0f, 1.0f,
@@ -307,7 +381,6 @@ void MyGame::DrawZombieTri(float x, float y, float size, float r, float g, float
         false
     );
 }
-
 
 float MyGame::Clamp01(float v)
 {
