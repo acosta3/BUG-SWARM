@@ -1,8 +1,8 @@
 #pragma once
-#include <cstdint>
 
 class ZombieSystem;
 class CameraSystem;
+class HiveSystem;   // NEW
 
 struct AttackInput
 {
@@ -27,6 +27,7 @@ public:
     void Process(const AttackInput& in,
         float playerX, float playerY,
         ZombieSystem& zombies,
+        HiveSystem& hives,          // NEW
         CameraSystem& camera);
 
     // Debug UI
@@ -43,7 +44,7 @@ private:
 private:
     void TickCooldown(float& cd, float dtMs);
 
-    void DoPulse(float playerX, float playerY, ZombieSystem& zombies, CameraSystem& camera);
-    void DoSlash(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera);
-    void DoMeteor(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera);
+    void DoPulse(float playerX, float playerY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
+    void DoSlash(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
+    void DoMeteor(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
 };

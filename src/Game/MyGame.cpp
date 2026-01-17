@@ -203,7 +203,7 @@ void MyGame::UpdateAttacks(float deltaTimeMs)
     const InputState& in = input.GetState();
     const AttackInput a = BuildAttackInput(in);
 
-    attacks.Process(a, px, py, zombies, camera);
+    attacks.Process(a, px, py, zombies,hives, camera);
 }
 
 void MyGame::UpdateNavFlowField(float playerX, float playerY)

@@ -1,5 +1,6 @@
 #include "AttackSystem.h"
 #include "ZombieSystem.h"
+#include "HiveSystem.h"
 #include "CameraSystem.h"
 #include <cmath>
 
@@ -27,26 +28,27 @@ void AttackSystem::Update(float deltaTimeMs)
 void AttackSystem::Process(const AttackInput& in,
     float playerX, float playerY,
     ZombieSystem& zombies,
+    HiveSystem& hives,
     CameraSystem& camera)
 {
     // Pulse
     if (in.pulsePressed && pulseCooldownMs <= 0.0f)
     {
-        DoPulse(playerX, playerY, zombies, camera);
+        DoPulse(playerX, playerY, zombies, hives, camera);
         pulseCooldownMs = 200.0f;
     }
 
     // Slash
     if (in.slashPressed && slashCooldownMs <= 0.0f)
     {
-        DoSlash(playerX, playerY, in.aimX, in.aimY, zombies, camera);
+        DoSlash(playerX, playerY, in.aimX, in.aimY, zombies, hives, camera);
         slashCooldownMs = 350.0f;
     }
 
     // Meteor
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
     {
-        DoMeteor(playerX, playerY, in.aimX, in.aimY, zombies, camera);
+        DoMeteor(playerX, playerY, in.aimX, in.aimY, zombies, hives, camera);
         meteorCooldownMs = 900.0f;
     }
 }
@@ -65,7 +67,7 @@ static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, Zombi
     camera.AddShake(10.0f, 0.12f);
 }
 
-void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, CameraSystem& camera)
+void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
 {
     const float radius = 80.0f;
     const float r2 = radius * radius;
@@ -93,13 +95,19 @@ void AttackSystem::DoPulse(float px, float py, ZombieSystem& zombies, CameraSyst
         }
     }
 
+    // ALSO damage hives in the pulse radius
+    const float hiveDamage = 20.0f;
+    const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage);
+    if (hitHive)
+        camera.AddShake(4.0f, 0.05f);
+
     if (killed > 0)
         camera.AddShake(6.0f, 0.08f);
 
     TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
-void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera)
+void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
 {
     const float range = 140.0f;
     const float range2 = range * range;
@@ -163,13 +171,25 @@ void AttackSystem::DoSlash(float px, float py, float aimX, float aimY, ZombieSys
         }
     }
 
+    // ALSO damage hives with a slash hit-circle in front of player
+    // (cheap + feels like a melee cone)
+    const float slashCenterDist = 90.0f;
+    const float hx = px + aimX * slashCenterDist;
+    const float hy = py + aimY * slashCenterDist;
+    const float slashHitRadius = 70.0f;
+    const float hiveDamage = 30.0f;
+
+    const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage);
+    if (hitHive)
+        camera.AddShake(5.0f, 0.06f);
+
     if (killed > 0)
         camera.AddShake(5.0f, 0.06f);
 
     TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
-void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSystem& zombies, CameraSystem& camera)
+void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
 {
     // Normalize aim
     float len2 = aimX * aimX + aimY * aimY;
@@ -214,6 +234,12 @@ void AttackSystem::DoMeteor(float px, float py, float aimX, float aimY, ZombieSy
             i++;
         }
     }
+
+    // ALSO damage hives at meteor impact
+    const float hiveDamage = 50.0f;
+    const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage);
+    if (hitHive)
+        camera.AddShake(9.0f, 0.12f);
 
     if (killed > 0)
         camera.AddShake(8.0f, 0.10f);
