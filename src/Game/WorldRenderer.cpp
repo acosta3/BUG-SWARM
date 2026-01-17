@@ -71,12 +71,12 @@ void WorldRenderer::RenderWorld(
 
     IsoProjector iso = IsoProjector::FromCameraOffset(offX, offY);
     player.RenderIso(iso);
-
+    nav.DebugDrawBlockedIso(iso);
     float px, py;
     player.GetWorldPosition(px, py);
 
     // Maze / obstacles
-    nav.DebugDrawBlocked(offX, offY);
+    //nav.DebugDrawBlocked(offX, offY);
 
     // Zombies (2.5D iso)
     RenderZombiesIso(offX, offY, zombies, densityView, px, py);
@@ -299,7 +299,7 @@ void WorldRenderer::RenderZombiesIso(
     float psx, psy;
     iso.WorldToScreen(playerX, playerY, 0.0f, psx, psy);
 
-    static const float sizeByType[4] = { 3.0f, 3.5f, 5.0f, 7.0f };
+    static const float sizeByType[4] = { 3.5f, 4.0f, 5.0f, 7.0f };
     static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
     static const float gByType[4] = { 1.0f, 0.2f, 0.4f, 0.2f };
     static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
@@ -342,7 +342,7 @@ void WorldRenderer::RenderZombiesIso(
                 it.sortKey = wx + wy;
                 it.sx = sx;
                 it.sy = sy;
-                it.size = cs * 0.45f;
+                it.size = cs * 0.45f; //0.45f
                 it.r = intensity;
                 it.g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
                 it.b = 0.1f;

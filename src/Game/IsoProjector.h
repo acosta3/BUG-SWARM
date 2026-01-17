@@ -27,7 +27,7 @@ struct IsoProjector
         const float x = wx - camCenterX;
         const float y = wy - camCenterY;
 
-        sx = (x - y) * kx + screenCX;
+        sx = (x-y) * kx + screenCX;
         sy = (x + y) * ky + screenCY - wz;
     }
 };

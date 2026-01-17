@@ -1,15 +1,28 @@
+// NavGrid.cpp
 #include "NavGrid.h"
 #include <algorithm>
 #include <cmath>
 #include <queue>
-#include "../ContestAPI/app.h"
 
+#include "../ContestAPI/app.h"
+#include "IsoProjector.h"
+
+// -------------------------------------------------
+// Helpers
+// -------------------------------------------------
+static inline void Shade(float r, float g, float b, float m, float& outR, float& outG, float& outB)
+{
+    outR = r * m;
+    outG = g * m;
+    outB = b * m;
+}
+
+// 2D quad helper (screen-space)
 static void DrawFilledQuad(
     float x0, float y0, float x1, float y1,
     float r, float g, float b,
     float z = 0.0f, float w = 1.0f)
 {
-    // Triangle 1: (x0,y0) (x1,y0) (x1,y1)
     App::DrawTriangle(
         x0, y0, z, w,
         x1, y0, z, w,
@@ -20,7 +33,6 @@ static void DrawFilledQuad(
         false
     );
 
-    // Triangle 2: (x0,y0) (x1,y1) (x0,y1)
     App::DrawTriangle(
         x0, y0, z, w,
         x1, y1, z, w,
@@ -32,7 +44,80 @@ static void DrawFilledQuad(
     );
 }
 
+// Draw one iso quad given 4 screen points (two triangles)
+static void DrawQuad4(
+    float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy,
+    float r, float g, float b)
+{
+    App::DrawTriangle(
+        ax, ay, 0.0f, 1.0f,
+        bx, by, 0.0f, 1.0f,
+        cx, cy, 0.0f, 1.0f,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
 
+    App::DrawTriangle(
+        ax, ay, 0.0f, 1.0f,
+        cx, cy, 0.0f, 1.0f,
+        dx, dy, 0.0f, 1.0f,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+}
+
+// World rect -> iso block (top + walls)
+static void DrawIsoBlock(
+    const IsoProjector& iso,
+    float wx0, float wy0, float wx1, float wy1,
+    float height,
+    float r, float g, float b)
+{
+    // Base (z = 0)
+    float b0x, b0y, b1x, b1y, b2x, b2y, b3x, b3y;
+    iso.WorldToScreen(wx0, wy0, 0.0f, b0x, b0y);
+    iso.WorldToScreen(wx1, wy0, 0.0f, b1x, b1y);
+    iso.WorldToScreen(wx1, wy1, 0.0f, b2x, b2y);
+    iso.WorldToScreen(wx0, wy1, 0.0f, b3x, b3y);
+
+    // Top (z = height)
+    float t0x, t0y, t1x, t1y, t2x, t2y, t3x, t3y;
+    iso.WorldToScreen(wx0, wy0, -height, t0x, t0y);
+    iso.WorldToScreen(wx1, wy0, -height, t1x, t1y);
+    iso.WorldToScreen(wx1, wy1, -height, t2x, t2y);
+    iso.WorldToScreen(wx0, wy1, -height, t3x, t3y);
+
+    // Top color slightly brighter
+    float rTop, gTop, bTop;
+    Shade(r, g, b, 1.10f, rTop, gTop, bTop);
+
+    // Wall shades
+    float rWall1, gWall1, bWall1;
+    float rWall2, gWall2, bWall2;
+    Shade(r, g, b, 0.65f, rWall1, gWall1, bWall1);
+    Shade(r, g, b, 0.80f, rWall2, gWall2, bWall2);
+
+    // Draw walls (all 4, cheap and simple)
+    // Edge 0-1
+    DrawQuad4(b0x, b0y, b1x, b1y, t1x, t1y, t0x, t0y, rWall2, gWall2, bWall2);
+    // Edge 1-2
+    DrawQuad4(b1x, b1y, b2x, b2y, t2x, t2y, t1x, t1y, rWall1, gWall1, bWall1);
+    // Edge 2-3
+    DrawQuad4(b2x, b2y, b3x, b3y, t3x, t3y, t2x, t2y, rWall2, gWall2, bWall2);
+    // Edge 3-0
+    DrawQuad4(b3x, b3y, b0x, b0y, t0x, t0y, t3x, t3y, rWall1, gWall1, bWall1);
+
+    // Draw top last
+    DrawQuad4(t0x, t0y, t1x, t1y, t2x, t2y, t3x, t3y, rTop, gTop, bTop);
+}
+
+// -------------------------------------------------
+// NavGrid
+// -------------------------------------------------
 void NavGrid::Init(float minX, float minY, float maxX, float maxY, float cs)
 {
     worldMinX = minX;
@@ -47,6 +132,8 @@ void NavGrid::Init(float minX, float minY, float maxX, float maxY, float cs)
     const int cellN = gridW * gridH;
 
     blocked.assign(cellN, 0);
+    cellHeight.assign(cellN, 0.0f);
+
     dist.resize(cellN);
     flowX.assign(cellN, 0.0f);
     flowY.assign(cellN, 0.0f);
@@ -68,36 +155,20 @@ int NavGrid::CellIndex(float x, float y) const
 void NavGrid::ClearObstacles()
 {
     std::fill(blocked.begin(), blocked.end(), 0);
+    std::fill(cellHeight.begin(), cellHeight.end(), 0.0f);
 }
 
-void NavGrid::AddObstacleRect(float x0, float y0, float x1, float y1)
+void NavGrid::AddObstacleRect(float x0, float y0, float x1, float y1, float height)
 {
     if (x0 > x1) std::swap(x0, x1);
     if (y0 > y1) std::swap(y0, y1);
 
-    int cx0 = (int)((x0 - worldMinX) / cellSize);
-    int cy0 = (int)((y0 - worldMinY) / cellSize);
-    int cx1 = (int)((x1 - worldMinX) / cellSize);
-    int cy1 = (int)((y1 - worldMinY) / cellSize);
+    const float eps = 0.001f;
 
-    cx0 = std::clamp(cx0, 0, gridW - 1);
-    cy0 = std::clamp(cy0, 0, gridH - 1);
-    cx1 = std::clamp(cx1, 0, gridW - 1);
-    cy1 = std::clamp(cy1, 0, gridH - 1);
-
-    for (int cy = cy0; cy <= cy1; cy++)
-        for (int cx = cx0; cx <= cx1; cx++)
-            blocked[cy * gridW + cx] = 1;
-}
-
-void NavGrid::AddObstacleCircle(float cxW, float cyW, float radius)
-{
-    const float r2 = radius * radius;
-
-    int cx0 = (int)((cxW - radius - worldMinX) / cellSize);
-    int cy0 = (int)((cyW - radius - worldMinY) / cellSize);
-    int cx1 = (int)((cxW + radius - worldMinX) / cellSize);
-    int cy1 = (int)((cyW + radius - worldMinY) / cellSize);
+    int cx0 = (int)std::floor((x0 - worldMinX) / cellSize);
+    int cy0 = (int)std::floor((y0 - worldMinY) / cellSize);
+    int cx1 = (int)std::floor(((x1 - eps) - worldMinX) / cellSize);
+    int cy1 = (int)std::floor(((y1 - eps) - worldMinY) / cellSize);
 
     cx0 = std::clamp(cx0, 0, gridW - 1);
     cy0 = std::clamp(cy0, 0, gridH - 1);
@@ -108,14 +179,45 @@ void NavGrid::AddObstacleCircle(float cxW, float cyW, float radius)
     {
         for (int cx = cx0; cx <= cx1; cx++)
         {
-            float centerX = worldMinX + (cx + 0.5f) * cellSize;
-            float centerY = worldMinY + (cy + 0.5f) * cellSize;
+            const int idx = cy * gridW + cx;
+            blocked[idx] = 1;
 
-            float dx = centerX - cxW;
-            float dy = centerY - cyW;
+            // avoid max macro issues
+            cellHeight[idx] = (cellHeight[idx] < height) ? height : cellHeight[idx];
+        }
+    }
+}
+
+void NavGrid::AddObstacleCircle(float cxW, float cyW, float radius, float height)
+{
+    const float r2 = radius * radius;
+
+    int cx0 = (int)std::floor(((cxW - radius) - worldMinX) / cellSize);
+    int cy0 = (int)std::floor(((cyW - radius) - worldMinY) / cellSize);
+    int cx1 = (int)std::floor(((cxW + radius) - worldMinX) / cellSize);
+    int cy1 = (int)std::floor(((cyW + radius) - worldMinY) / cellSize);
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    for (int cy = cy0; cy <= cy1; cy++)
+    {
+        for (int cx = cx0; cx <= cx1; cx++)
+        {
+            const float centerX = worldMinX + (cx + 0.5f) * cellSize;
+            const float centerY = worldMinY + (cy + 0.5f) * cellSize;
+
+            const float dx = centerX - cxW;
+            const float dy = centerY - cyW;
 
             if (dx * dx + dy * dy <= r2)
-                blocked[cy * gridW + cx] = 1;
+            {
+                const int idx = cy * gridW + cx;
+                blocked[idx] = 1;
+                cellHeight[idx] = (cellHeight[idx] < height) ? height : cellHeight[idx];
+            }
         }
     }
 }
@@ -235,13 +337,11 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
     const float screenW = 1024.0f;
     const float screenH = 768.0f;
 
-    // Visible world bounds
     const float viewMinX = offX;
     const float viewMinY = offY;
     const float viewMaxX = offX + screenW;
     const float viewMaxY = offY + screenH;
 
-    // Convert visible world bounds to cell bounds
     int cx0 = (int)((viewMinX - worldMinX) / cellSize) - 1;
     int cy0 = (int)((viewMinY - worldMinY) / cellSize) - 1;
     int cx1 = (int)((viewMaxX - worldMinX) / cellSize) + 1;
@@ -252,7 +352,6 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
     cx1 = std::clamp(cx1, 0, gridW - 1);
     cy1 = std::clamp(cy1, 0, gridH - 1);
 
-    // Style
     const float r = 1.0f, g = 0.1f, b = 0.1f;
 
     for (int cy = cy0; cy <= cy1; ++cy)
@@ -260,8 +359,7 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
         for (int cx = cx0; cx <= cx1; ++cx)
         {
             const int idx = cy * gridW + cx;
-            if (blocked[idx] == 0)
-                continue;
+            if (blocked[idx] == 0) continue;
 
             const float wx0 = worldMinX + cx * cellSize;
             const float wy0 = worldMinY + cy * cellSize;
@@ -278,3 +376,34 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
     }
 }
 
+void NavGrid::DebugDrawBlockedIso(const IsoProjector& iso) const
+{
+    struct Col { float r, g, b; };
+    static const Col palette[] =
+    {
+        {0.55f, 0.55f, 0.60f}, // steel
+        {0.60f, 0.50f, 0.45f}, // brick
+        {0.45f, 0.58f, 0.48f}, // greenish
+        {0.48f, 0.52f, 0.62f}, // slate blue
+        {0.62f, 0.56f, 0.40f}, // sand
+    };
+
+    for (int cy = 0; cy < gridH; ++cy)
+    {
+        for (int cx = 0; cx < gridW; ++cx)
+        {
+            const int idx = cy * gridW + cx;
+            if (blocked[idx] == 0) continue;
+
+            const float wx0 = worldMinX + cx * cellSize;
+            const float wy0 = worldMinY + cy * cellSize;
+            const float wx1 = wx0 + cellSize;
+            const float wy1 = wy0 + cellSize;
+
+            const float h = cellHeight[idx];
+
+            const Col c = palette[idx % (sizeof(palette) / sizeof(palette[0]))];
+            DrawIsoBlock(iso, wx0, wy0, wx1, wy1, h, c.r, c.g, c.b);
+        }
+    }
+}

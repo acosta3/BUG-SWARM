@@ -102,36 +102,37 @@ void MyGame::InitObstacles()
 {
     // Row 1
     nav.AddObstacleRect(-420.0f, -260.0f, -380.0f, -220.0f);
-    nav.AddObstacleCircle(-300.0f, -240.0f, 22.0f);
+   
     nav.AddObstacleRect(-220.0f, -270.0f, -180.0f, -230.0f);
-    nav.AddObstacleCircle(-100.0f, -240.0f, 22.0f);
+    
     nav.AddObstacleRect(0.0f, -260.0f, 40.0f, -220.0f);
 
     // Row 2
     nav.AddObstacleCircle(-380.0f, -120.0f, 22.0f);
     nav.AddObstacleRect(-280.0f, -140.0f, -240.0f, -100.0f);
-    nav.AddObstacleCircle(-160.0f, -120.0f, 22.0f);
+  
     nav.AddObstacleRect(-60.0f, -140.0f, -20.0f, -100.0f);
-    nav.AddObstacleCircle(80.0f, -120.0f, 22.0f);
+    
 
     // Row 3
     nav.AddObstacleRect(-420.0f, 0.0f, -380.0f, 40.0f);
-    nav.AddObstacleCircle(-300.0f, 20.0f, 22.0f);
+   
     nav.AddObstacleRect(-220.0f, -10.0f, -180.0f, 30.0f);
-    nav.AddObstacleCircle(-100.0f, 20.0f, 22.0f);
+ 
     nav.AddObstacleRect(0.0f, 0.0f, 40.0f, 40.0f);
 
     // Row 4
-    nav.AddObstacleCircle(-380.0f, 140.0f, 22.0f);
     nav.AddObstacleRect(-280.0f, 120.0f, -240.0f, 160.0f);
-    nav.AddObstacleCircle(-160.0f, 140.0f, 22.0f);
+ 
     nav.AddObstacleRect(-60.0f, 120.0f, -20.0f, 160.0f);
-    nav.AddObstacleCircle(80.0f, 140.0f, 22.0f);
-
+   
     // Bar
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
 
 	nav.ClearObstacles(); // issue is how my rectangle are colliding 
+
+    nav.AddObstacleRect(-420.0f, -260.0f, -380.0f, -220.0f);
+
 }
 
 void MyGame::InitSystems()
@@ -141,7 +142,7 @@ void MyGame::InitSystems()
 
     // Zombies AFTER nav (so zombies can copy world bounds from nav)
     zombies.Init(50000, nav);
-    zombies.Spawn(1, px, py);
+    zombies.Spawn(10'000, px, py);
 
     // Attacks last (depends on zombies + camera)
     attacks.Init();
