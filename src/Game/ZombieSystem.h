@@ -20,24 +20,20 @@ struct ZombieTypeStats
 // Central place for all "magic numbers"
 struct ZombieTuning
 {
-    // Touch damage collision sizes
     float playerRadius = 16.0f;
     float zombieRadius = 14.0f;
 
-    // Separation LOD (only separate when close to player)
-    float sepActiveRadius = 600.0f;
+    // Only run separation when near the player (LOD)
+    float sepActiveRadius = 700.0f;
 
-    // Separation force radius
-    float sepRadius = 18.0f;
+    // Actual neighbor separation distance
+    float sepRadius = 45.0f;   // try 40 to 60
 
-    // Fear behavior (despawn when far away)
     float fleeDespawnRadius = 1200.0f;
 
-    // Flow assist behavior
     float flowAssistBurstMs = 300.0f;
     float flowWeight = 0.75f;
 
-    // Density render tuning (visual only)
     float densityDenom = 20.0f;
 };
 

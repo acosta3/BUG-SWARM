@@ -3,6 +3,7 @@
 #include <memory>
 
 class NavGrid;
+class IsoProjector;
 
 class Player
 {
@@ -11,12 +12,18 @@ public:
     void Update(float deltaTime);
     void Render(float camOffsetX, float camOffsetY) const;
 
-    // Input intent (fed by MyGame)
+    // draw sprite using isometric projection (simulation stays in world coords)
+    void RenderIso(const IsoProjector& iso) const;
+
+    // Movement (world-space)
     void SetMoveInput(float x, float y) { moveX = x; moveY = y; }
+
+    // View/animation direction (screen-space)
+    void SetViewInput(float x, float y) { viewX = x; viewY = y; }
+
     void SetStopAnimPressed(bool pressed) { stopAnimPressed = pressed; }
 
     void GetWorldPosition(float& outX, float& outY) const;
-
     void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
@@ -24,20 +31,26 @@ public:
 public:
     void TakeDamage(int amount);
     bool IsDead() const { return dead; }
-    int GetHealth() const { return health; }
-    int GetMaxHealth() const { return maxHealth; }
+    int  GetHealth() const { return health; }
+    int  GetMaxHealth() const { return maxHealth; }
 
 private:
-    int health = 100;
-    int maxHealth = 100;
+    int  health = 100;
+    int  maxHealth = 100;
     bool dead = false;
 
 private:
     std::unique_ptr<CSimpleSprite> sprite;
     float speedPixelsPerSec = 200.0f;
 
+    // world movement input
     float moveX = 0.0f;
     float moveY = 0.0f;
+
+    // screen/view input (for animation facing)
+    float viewX = 0.0f;
+    float viewY = 0.0f;
+
     bool stopAnimPressed = false;
 
     const NavGrid* nav = nullptr;

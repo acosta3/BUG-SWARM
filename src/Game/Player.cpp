@@ -1,5 +1,6 @@
 ﻿#include "Player.h"
 #include "NavGrid.h"
+#include "IsoProjector.h"
 #include <cmath>
 
 void Player::Init()
@@ -25,8 +26,6 @@ void Player::Update(float deltaTime)
 {
     if (!sprite) return;
 
-   
-
     sprite->Update(deltaTime);
 
     if (stopAnimPressed)
@@ -35,22 +34,34 @@ void Player::Update(float deltaTime)
         return;
     }
 
+    // movement uses WORLD input (already mapped in MyGame)
     float mx = moveX;
     float my = moveY;
 
-    const float dead = 0.15f;
-    if (std::fabs(mx) < dead) mx = 0.0f;
-    if (std::fabs(my) < dead) my = 0.0f;
+    const float deadZone = 0.15f;
+    if (std::fabs(mx) < deadZone) mx = 0.0f;
+    if (std::fabs(my) < deadZone) my = 0.0f;
 
     const bool moving = (mx != 0.0f || my != 0.0f);
 
+    // animation facing uses VIEW input (screen direction)
+    float vx = viewX;
+    float vy = viewY;
+    if (std::fabs(vx) < deadZone) vx = 0.0f;
+    if (std::fabs(vy) < deadZone) vy = 0.0f;
+
+    const bool viewMoving = (vx != 0.0f || vy != 0.0f);
+
+    if (viewMoving)
+    {
+        if (std::fabs(vx) > std::fabs(vy))
+            facing = (vx > 0.0f) ? FACE_RIGHT : FACE_LEFT;
+        else
+            facing = (vy > 0.0f) ? FACE_FWD : FACE_BACK;
+    }
+
     if (moving)
     {
-        if (std::fabs(mx) > std::fabs(my))
-            facing = (mx > 0.0f) ? FACE_RIGHT : FACE_LEFT;
-        else
-            facing = (my > 0.0f) ? FACE_FWD : FACE_BACK;
-
         switch (facing)
         {
         case FACE_RIGHT: sprite->SetAnimation(ANIM_WALK_RIGHT); break;
@@ -62,7 +73,7 @@ void Player::Update(float deltaTime)
         float lenSq = mx * mx + my * my;
         if (lenSq > 1.0f)
         {
-            float invLen = 1.0f / std::sqrt(lenSq);
+            const float invLen = 1.0f / std::sqrt(lenSq);
             mx *= invLen;
             my *= invLen;
         }
@@ -76,8 +87,6 @@ void Player::Update(float deltaTime)
 
         MoveWithCollision(x, y, dx, dy);
         sprite->SetPosition(x, y);
-
-      
 
         wasMovingLastFrame = true;
         return;
@@ -107,9 +116,24 @@ void Player::Render(float camOffsetX, float camOffsetY) const
     sprite->SetPosition(wx - camOffsetX, wy - camOffsetY);
     sprite->Draw();
 
-    sprite->SetPosition(wx, wy); // restore world position
+    sprite->SetPosition(wx, wy);
 }
 
+void Player::RenderIso(const IsoProjector& iso) const
+{
+    if (!sprite) return;
+
+    float wx, wy;
+    sprite->GetPosition(wx, wy);
+
+    float sx, sy;
+    iso.WorldToScreen(wx, wy, 0.0f, sx, sy);
+
+    sprite->SetPosition(sx, sy);
+    sprite->Draw();
+
+    sprite->SetPosition(wx, wy);
+}
 
 void Player::GetWorldPosition(float& outX, float& outY) const
 {
@@ -123,14 +147,12 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     float s = sprite->GetScale();
 
-    // scale speed: units per second (tweak this)
     const float scalePerSec = 1.0f;
     const float dt = deltaTime / 1000.0f;
 
     if (scaleUpHeld)   s += scalePerSec * dt;
     if (scaleDownHeld) s -= scalePerSec * dt;
 
-    // clamp so it never goes invisible/negative
     if (s < 0.1f) s = 0.1f;
     if (s > 5.0f) s = 5.0f;
 
@@ -147,10 +169,9 @@ void Player::TakeDamage(int amount)
     if (health == 0)
     {
         dead = true;
-        if (sprite) sprite->SetAnimation(-1); // stop anim (if supported)
+        if (sprite) sprite->SetAnimation(-1);
     }
 }
-
 
 bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 {
@@ -164,29 +185,27 @@ bool Player::CircleHitsBlocked(float cx, float cy, float r) const
     const float midX = cx;
     const float midY = cy;
 
-    return nav->IsBlockedWorld(minX, minY) || // TL
-        nav->IsBlockedWorld(midX, minY) || // T
-        nav->IsBlockedWorld(maxX, minY) || // TR
-        nav->IsBlockedWorld(minX, midY) || // L
-        nav->IsBlockedWorld(maxX, midY) || // R
-        nav->IsBlockedWorld(minX, maxY) || // BL
-        nav->IsBlockedWorld(midX, maxY) || // B
-        nav->IsBlockedWorld(maxX, maxY);   // BR
+    return nav->IsBlockedWorld(minX, minY) ||
+        nav->IsBlockedWorld(midX, minY) ||
+        nav->IsBlockedWorld(maxX, minY) ||
+        nav->IsBlockedWorld(minX, midY) ||
+        nav->IsBlockedWorld(maxX, midY) ||
+        nav->IsBlockedWorld(minX, maxY) ||
+        nav->IsBlockedWorld(midX, maxY) ||
+        nav->IsBlockedWorld(maxX, maxY);
 }
 
 void Player::MoveWithCollision(float& x, float& y, float dx, float dy)
 {
-    float s = sprite ? sprite->GetScale() : 1.0f;
+    const float s = sprite ? sprite->GetScale() : 1.0f;
 
-    const float baseR = 40.0f;          // 
+    const float baseR = 40.0f;
     const float r = baseR * s;
 
-    // X axis
     float nx = x + dx;
     if (!CircleHitsBlocked(nx, y, r))
         x = nx;
 
-    // Y axis
     float ny = y + dy;
     if (!CircleHitsBlocked(x, ny, r))
         y = ny;

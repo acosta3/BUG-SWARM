@@ -3,6 +3,32 @@
 #include <cstdio>
 #include <cmath>
 
+
+static inline void ScreenDirToWorldDir(float sxDir, float syDir, float kx, float ky, float& outWx, float& outWy)
+{
+    // Inverse of:
+    // dsx = (dx - dy) * kx
+    // dsy = (dx + dy) * ky
+    const float inv2kx = (kx != 0.0f) ? (1.0f / (2.0f * kx)) : 0.0f;
+    const float inv2ky = (ky != 0.0f) ? (1.0f / (2.0f * ky)) : 0.0f;
+
+    float wx = sxDir * inv2kx + syDir * inv2ky;
+    float wy = -sxDir * inv2kx + syDir * inv2ky;
+
+    // normalize so diagonals are not faster
+    const float len2 = wx * wx + wy * wy;
+    if (len2 > 0.0001f)
+    {
+        const float invLen = 1.0f / std::sqrt(len2);
+        wx *= invLen;
+        wy *= invLen;
+    }
+
+    outWx = wx;
+    outWy = wy;
+}
+
+
 // ------------------------------------------------------------
 // Public API
 // ------------------------------------------------------------
@@ -115,7 +141,7 @@ void MyGame::InitSystems()
 
     // Zombies AFTER nav (so zombies can copy world bounds from nav)
     zombies.Init(50000, nav);
-    zombies.Spawn(10'000, px, py);
+    zombies.Spawn(1, px, py);
 
     // Attacks last (depends on zombies + camera)
     attacks.Init();
@@ -139,22 +165,36 @@ void MyGame::UpdateInput(float deltaTimeMs)
         densityView = !densityView;
 }
 
+
 void MyGame::UpdatePlayer(float deltaTimeMs)
 {
     const InputState& in = input.GetState();
 
-    player.SetMoveInput(in.moveX, in.moveY);
+    // screen input (what the player feels as left/right/up/down)
+    const float sx = in.moveX;
+    const float sy = in.moveY;
+
+    // convert to world-space movement so "left" feels left in iso
+    const float wx = 0.5f * (sx + sy);
+    const float wy = 0.5f * (sy - sx);
+
+    player.SetMoveInput(wx, wy);
+
+    // NEW: keep view input for animations/facing
+    player.SetViewInput(sx, sy);
+
     player.Update(deltaTimeMs);
     player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTimeMs);
 
-    // Update last aim when moving
-    const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
+    // last aim should match world movement (for attacks)
+    const float len2 = wx * wx + wy * wy;
     if (len2 > 0.0001f)
     {
-        lastAimX = in.moveX;
-        lastAimY = in.moveY;
+        lastAimX = wx;
+        lastAimY = wy;
     }
 }
+
 
 AttackInput MyGame::BuildAttackInput(const InputState& in)
 {

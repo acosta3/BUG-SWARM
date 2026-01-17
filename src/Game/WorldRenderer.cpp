@@ -23,7 +23,7 @@ struct ZombieDrawItem
     float sx, sy;    // projected screen position
     float size;
     float r, g, b;
-    float angle;     // facing angle in SCREEN space (radians)
+    float angle;     // facing (radians) in SCREEN space
 };
 
 static inline void Shade(float r, float g, float b, float m, float& outR, float& outG, float& outB)
@@ -38,6 +38,7 @@ static inline void Rotate2D(float lx, float ly, float c, float s, float& outX, f
     outX = lx * c - ly * s;
     outY = lx * s + ly * c;
 }
+static constexpr float HALF_PI = 1.57079632679489661923f;
 
 // --------------------------------------------
 // Public
@@ -66,7 +67,10 @@ void WorldRenderer::RenderWorld(
     bool densityView)
 {
     // Player is still 2D for now
-    player.Render(offX, offY);
+   // player.Render(offX, offY);
+
+    IsoProjector iso = IsoProjector::FromCameraOffset(offX, offY);
+    player.RenderIso(iso);
 
     float px, py;
     player.GetWorldPosition(px, py);
@@ -192,16 +196,19 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
 // --------------------------------------------
 // Iso wedge (top + 2 side faces) in screen space
 // --------------------------------------------
-void WorldRenderer::DrawIsoWedge(float sx, float sy, float size, float height,
-    float r, float g, float b, float angleRad)
+void WorldRenderer::DrawIsoWedge(
+    float sx, float sy,
+    float size, float height,
+    float r, float g, float b,
+    float angleRad)
 {
     const float c = std::cos(angleRad);
     const float s = std::sin(angleRad);
 
     // Local upright triangle (around 0,0)
-    // Tip is (0, -size) so "forward" is UP in screen space when angleRad = 0
-    const float lx1 = 0.0f;    const float ly1 = -size;
-    const float lx2 = -size;   const float ly2 = size;
+    // Tip is (0, -size). This is our "forward" direction.
+    const float lx1 = 0.0f;   const float ly1 = -size;
+    const float lx2 = -size;  const float ly2 = size;
     const float lx3 = size;   const float ly3 = size;
 
     float rx1, ry1, rx2, ry2, rx3, ry3;
@@ -278,9 +285,7 @@ void WorldRenderer::DrawIsoWedge(float sx, float sy, float size, float height,
 }
 
 // --------------------------------------------
-// Zombies ISO (depth sort + wedge draw)
-// Facing is computed in SCREEN space.
-// We add +PI/2 so the local tip (0,-1) points toward the player.
+// Zombies ISO (depth sort + wedge draw + facing player)
 // --------------------------------------------
 void WorldRenderer::RenderZombiesIso(
     float offX, float offY,
@@ -290,18 +295,16 @@ void WorldRenderer::RenderZombiesIso(
 {
     IsoProjector iso = IsoProjector::FromCameraOffset(offX, offY);
 
+    // Project player once (we rotate wedges in screen space)
+    float psx, psy;
+    iso.WorldToScreen(playerX, playerY, 0.0f, psx, psy);
+
     static const float sizeByType[4] = { 3.0f, 3.5f, 5.0f, 7.0f };
     static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
     static const float gByType[4] = { 1.0f, 0.2f, 0.4f, 0.2f };
     static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
 
     const int count = zombies.AliveCount();
-
-    // Project player once (screen space target)
-    float psx, psy;
-    iso.WorldToScreen(playerX, playerY, 0.0f, psx, psy);
-
-    const float PI_2 = 1.57079632679f;
 
     // Density view
     if (densityView)
@@ -344,8 +347,9 @@ void WorldRenderer::RenderZombiesIso(
                 it.g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
                 it.b = 0.1f;
 
-                // Screen-space facing, plus 90 degrees to match tip (0,-1)
-                it.angle = std::atan2(psy - sy, psx - sx) + PI_2;
+                // Face player in SCREEN space.
+                // +90 degrees because our local "forward" is (0, -1).
+                it.angle = std::atan2(psy - sy, psx - sx) + HALF_PI;
 
                 items.push_back(it);
             }
@@ -408,8 +412,8 @@ void WorldRenderer::RenderZombiesIso(
         it.size = sizeByType[t];
         it.r = r; it.g = g; it.b = b;
 
-        // Screen-space facing, plus 90 degrees to match tip (0,-1)
-        it.angle = std::atan2(psy - sy, psx - sx) + PI_2;
+        // Face player in SCREEN space, with +90 degrees offset
+        it.angle = std::atan2(psy - sy, psx - sx) + HALF_PI;
 
         items.push_back(it);
     }
