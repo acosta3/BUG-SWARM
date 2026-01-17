@@ -4,6 +4,7 @@
 #include "CameraSystem.h"
 #include "ZombieSystem.h"
 #include "AttackSystem.h"
+#include "NavGrid.h"
 
 class MyGame
 {
@@ -29,6 +30,8 @@ private:
     CameraSystem camera;
 
 	ZombieSystem zombies;
+
+    NavGrid nav;
 private:
     bool densityView = false;
     static float Clamp01(float v);

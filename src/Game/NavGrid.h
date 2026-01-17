@@ -15,6 +15,8 @@ public:
     // Flow field toward target
     void BuildFlowField(float targetX, float targetY);
 
+    void DebugDrawBlocked(float offX, float offY) const;
+
     // Queries
     int   CellIndex(float x, float y) const;
     bool  IsBlockedCell(int cellIndex) const { return blocked[cellIndex] != 0; }
@@ -29,6 +31,10 @@ public:
     float WorldMinX() const { return worldMinX; }
     float WorldMinY() const { return worldMinY; }
     int   CellCount() const { return gridW * gridH; }
+
+    float WorldMaxX() const { return worldMaxX; }
+    float WorldMaxY() const { return worldMaxY; }
+    
 
 private:
     float worldMinX = -5000.0f;

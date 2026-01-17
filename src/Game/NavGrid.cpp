@@ -2,6 +2,36 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include "../ContestAPI/app.h"
+
+static void DrawFilledQuad(
+    float x0, float y0, float x1, float y1,
+    float r, float g, float b,
+    float z = 0.0f, float w = 1.0f)
+{
+    // Triangle 1: (x0,y0) (x1,y0) (x1,y1)
+    App::DrawTriangle(
+        x0, y0, z, w,
+        x1, y0, z, w,
+        x1, y1, z, w,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+
+    // Triangle 2: (x0,y0) (x1,y1) (x0,y1)
+    App::DrawTriangle(
+        x0, y0, z, w,
+        x1, y1, z, w,
+        x0, y1, z, w,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+}
+
 
 void NavGrid::Init(float minX, float minY, float maxX, float maxY, float cs)
 {
@@ -199,3 +229,52 @@ void NavGrid::BuildFlowField(float targetX, float targetY)
         }
     }
 }
+
+void NavGrid::DebugDrawBlocked(float offX, float offY) const
+{
+    const float screenW = 1024.0f;
+    const float screenH = 768.0f;
+
+    // Visible world bounds
+    const float viewMinX = offX;
+    const float viewMinY = offY;
+    const float viewMaxX = offX + screenW;
+    const float viewMaxY = offY + screenH;
+
+    // Convert visible world bounds to cell bounds
+    int cx0 = (int)((viewMinX - worldMinX) / cellSize) - 1;
+    int cy0 = (int)((viewMinY - worldMinY) / cellSize) - 1;
+    int cx1 = (int)((viewMaxX - worldMinX) / cellSize) + 1;
+    int cy1 = (int)((viewMaxY - worldMinY) / cellSize) + 1;
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    // Style
+    const float r = 1.0f, g = 0.1f, b = 0.1f;
+
+    for (int cy = cy0; cy <= cy1; ++cy)
+    {
+        for (int cx = cx0; cx <= cx1; ++cx)
+        {
+            const int idx = cy * gridW + cx;
+            if (blocked[idx] == 0)
+                continue;
+
+            const float wx0 = worldMinX + cx * cellSize;
+            const float wy0 = worldMinY + cy * cellSize;
+            const float wx1 = wx0 + cellSize;
+            const float wy1 = wy0 + cellSize;
+
+            const float x0 = wx0 - offX;
+            const float y0 = wy0 - offY;
+            const float x1 = wx1 - offX;
+            const float y1 = wy1 - offY;
+
+            DrawFilledQuad(x0, y0, x1, y1, r, g, b);
+        }
+    }
+}
+

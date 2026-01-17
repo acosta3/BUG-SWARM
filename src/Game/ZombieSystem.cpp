@@ -1,4 +1,6 @@
 ﻿#include "ZombieSystem.h"
+#include "NavGrid.h"
+
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -8,7 +10,9 @@ static float Rand01()
     return (float)std::rand() / (float)RAND_MAX;
 }
 
-void ZombieSystem::Init(int maxZombies)
+
+
+void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
 {
     maxCount = maxZombies;
     aliveCount = 0;
@@ -27,6 +31,14 @@ void ZombieSystem::Init(int maxZombies)
 
     InitTypeStats();
 
+    // --- Copy world bounds from NavGrid (single source of truth) ---
+    worldMinX = nav.WorldMinX();
+    worldMinY = nav.WorldMinY();
+    // You don't have WorldMax getters yet, add them (see below)
+    worldMaxX = nav.WorldMaxX();
+    worldMaxY = nav.WorldMaxY();
+
+    // --- Separation grid uses its own cellSize (keep this independent) ---
     gridW = (int)((worldMaxX - worldMinX) / cellSize) + 1;
     gridH = (int)((worldMaxY - worldMinY) / cellSize) + 1;
 
@@ -35,6 +47,7 @@ void ZombieSystem::Init(int maxZombies)
     writeCursor.resize(gridW * gridH + 1);
     cellList.resize(maxCount);
 }
+
 
 void ZombieSystem::InitTypeStats()
 {
@@ -53,6 +66,7 @@ uint8_t ZombieSystem::RollTypeWeighted() const
     return PURPLE_ELITE;
 }
 
+// Separation grid cell index (ZombieSystem-owned grid)
 int ZombieSystem::CellIndex(float x, float y) const
 {
     int cx = (int)((x - worldMinX) / cellSize);
@@ -143,29 +157,29 @@ void ZombieSystem::Kill(int index)
     aliveCount--;
 }
 
-void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
+void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
     const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return;
 
-    BuildGrid();
+    BuildGrid(); // separation grid, once per frame
 
-    // SIM LOD: only do separation near the player
+    // SIM LOD: only do separation near player
     const float sepActiveRadius = 600.0f;
     const float sepActiveRadiusSq = sepActiveRadius * sepActiveRadius;
 
-    // Fear despawn: if they flee far enough, remove them
+    // Fear despawn
     const float fleeDespawnRadius = 1200.0f;
     const float fleeDespawnRadiusSq = fleeDespawnRadius * fleeDespawnRadius;
 
-    // Separation radius
+    // Separation
     const float sepRadius = 18.0f;
     const float sepRadiusSq = sepRadius * sepRadius;
 
-    // IMPORTANT: swap-remove safe loop
+    // swap-remove safe loop
     for (int i = 0; i < aliveCount; )
     {
-        // Timers (avoid std::max macro issues)
+        // Timers
         if (fearTimerMs[i] > 0.f)
         {
             fearTimerMs[i] -= deltaTimeMs;
@@ -181,47 +195,42 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
         const uint8_t t = type[i];
         const ZombieTypeStats& s = typeStats[t];
 
-        // Vector to player + distance (compute once)
+        // Dist to player (used for LOD + despawn)
         float toPX = playerX - posX[i];
         float toPY = playerY - posY[i];
         float distSqToPlayer = toPX * toPX + toPY * toPY;
 
         const bool feared = (fearTimerMs[i] > 0.0f);
 
-        // If feared and far enough, despawn
+        // Despawn if feared and far away
         if (feared && distSqToPlayer > fleeDespawnRadiusSq)
         {
-            Kill(i);        // swap-remove
-            continue;       // do NOT i++
+            Kill(i);
+            continue;
         }
 
-        // Direction: seek or flee
-        float dx = toPX;
-        float dy = toPY;
+        float dx = 0.0f;
+        float dy = 0.0f;
 
         if (feared)
         {
-            dx = -dx;
-            dy = -dy;
-        }
+            // Panic flee: run away from player (cheap)
+            dx = -toPX;
+            dy = -toPY;
 
-        // Normalize direction
-        float lenSq = dx * dx + dy * dy;
-        if (lenSq > 0.0001f)
-        {
-            float invLen = 1.0f / std::sqrt(lenSq);
-            dx *= invLen;
-            dy *= invLen;
-        }
-        else
-        {
-            dx = 0.0f;
-            dy = 0.0f;
-        }
+            float lenSq = dx * dx + dy * dy;
+            if (lenSq > 0.0001f)
+            {
+                float invLen = 1.0f / std::sqrt(lenSq);
+                dx *= invLen;
+                dy *= invLen;
+            }
+            else
+            {
+                dx = 0.0f;
+                dy = 0.0f;
+            }
 
-        // While feared: cheap panic flee (no separation)
-        if (feared)
-        {
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
@@ -231,8 +240,36 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
             i++;
             continue;
         }
+        else
+        {
+            // Normal seek uses NAV flow field (path around obstacles)
+            int navCell = nav.CellIndex(posX[i], posY[i]);
+            dx = nav.FlowXAtCell(navCell);
+            dy = nav.FlowYAtCell(navCell);
 
-        // ---- SIM LOD EARLY-OUT (seek only when far) ----
+            // If flow is zero (unreachable or already at target), fallback to direct seek
+            float flowLenSq = dx * dx + dy * dy;
+            if (flowLenSq < 0.0001f)
+            {
+                dx = toPX;
+                dy = toPY;
+
+                float lenSq = dx * dx + dy * dy;
+                if (lenSq > 0.0001f)
+                {
+                    float invLen = 1.0f / std::sqrt(lenSq);
+                    dx *= invLen;
+                    dy *= invLen;
+                }
+                else
+                {
+                    dx = 0.0f;
+                    dy = 0.0f;
+                }
+            }
+        }
+
+        // SIM LOD: far away = no separation
         if (distSqToPlayer > sepActiveRadiusSq)
         {
             velX[i] = dx * s.maxSpeed;
@@ -244,7 +281,6 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
             i++;
             continue;
         }
-        // ------------------------------------------------
 
         // Separation (grid neighbors)
         float sepX = 0.0f;
@@ -265,7 +301,6 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
                 if (nx < 0 || nx >= gridW) continue;
 
                 int nc = ny * gridW + nx;
-
                 int start = cellStart[nc];
                 int end = cellStart[nc + 1];
 
@@ -283,7 +318,7 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
                         float d = std::sqrt(d2);
                         float invD = 1.0f / d;
 
-                        float push = (sepRadius - d) / sepRadius; // 0..1
+                        float push = (sepRadius - d) / sepRadius;
                         sepX += ax * invD * push;
                         sepY += ay * invD * push;
                     }
@@ -309,7 +344,6 @@ void ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY)
             vy = 0.0f;
         }
 
-        // Apply speed + integrate
         velX[i] = vx * s.maxSpeed;
         velY[i] = vy * s.maxSpeed;
 
@@ -326,7 +360,6 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
 
     for (int i = 0; i < aliveCount; i++)
     {
-        // Optional: elites don't get feared
         if (type[i] == PURPLE_ELITE)
             continue;
 
@@ -337,11 +370,10 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
         if (d2 <= r2)
         {
             state[i] = FLEE;
-            fearTimerMs[i] = durationMs; // refresh/overwrite
+            fearTimerMs[i] = durationMs;
         }
     }
 }
-
 
 void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
 {

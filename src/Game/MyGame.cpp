@@ -4,26 +4,31 @@
 
 void MyGame::Init()
 {
+    // 1) Player first (so we can grab spawn position)
     player.Init();
-    camera.Init(1024.0f, 768.0f); // matches APP_VIRTUAL_WIDTH/HEIGHT
 
-    // IMPORTANT: init pool before spawn
-    zombies.Init(50000);
-
-
-
-    // Spawn around the player's start position so it is always on-screen
     float px, py;
     player.GetWorldPosition(px, py);
-    zombies.Spawn(10000, px, py);
 
-    // attack
-    attacks.Init();
-
-
-    // Optional: set initial camera target so first frame is centered
+    // 2) Camera next (so first frame is centered)
+    camera.Init(1024.0f, 768.0f);
     camera.Follow(px, py);
 
+    // 3) NavGrid (world + obstacles) BEFORE zombies
+    nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f); // nav cell size can be bigger
+    nav.ClearObstacles();
+
+    // Add some starter obstacles
+    nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
+    //nav.AddObstacleRect(-400.0f, 150.0f, 400.0f, 200.0f);
+    //nav.AddObstacleCircle(200.0f, 0.0f, 120.0f);
+
+    // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
+    zombies.Init(50000, nav);          // <-- if you changed Init signature
+    zombies.Spawn(1, px, py);
+
+    // 5) Attacks last (depends on zombies + camera existing)
+    attacks.Init();
 
 }
 
@@ -82,7 +87,7 @@ void MyGame::Update(float deltaTime)
     camera.Update(deltaTime);
 
     // Zombies chase the player (after attack is fine)
-    zombies.Update(deltaTime, px, py);
+    zombies.Update(deltaTime, px, py,nav);
 }
 
 
@@ -107,6 +112,11 @@ void MyGame::Render()
 
     int step = 1;
     int drawn = 0;
+
+   
+    nav.DebugDrawBlocked(offX, offY); // render the map 
+    
+       
 
     if (densityView)
     {
