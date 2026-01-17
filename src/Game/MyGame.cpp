@@ -60,7 +60,7 @@ void MyGame::Init()
 
     // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
     zombies.Init(50000, nav);          // <-- if you changed Init signature
-    zombies.Spawn(100, px, py);
+    zombies.Spawn(10'000, px, py);
 
     // 5) Attacks last (depends on zombies + camera existing)
     attacks.Init();
