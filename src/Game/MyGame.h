@@ -6,6 +6,7 @@
 #include "ZombieSystem.h"
 #include "AttackSystem.h"
 #include "NavGrid.h"
+#include "HiveSystem.h"
 
 // New
 #include "WorldRenderer.h"
@@ -41,6 +42,8 @@ private:
     ZombieSystem zombies;
     AttackSystem attacks;
     NavGrid nav;
+
+    HiveSystem hives;
 
     // New: all drawing lives here now
     WorldRenderer renderer;

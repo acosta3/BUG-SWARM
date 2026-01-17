@@ -26,10 +26,17 @@ void MyGame::Update(float deltaTimeMs)
         return;
     }
 
+
+    hives.Update(deltaTimeMs);
+
     UpdatePlayer(deltaTimeMs);
+
+
+
 
     float px, py;
     player.GetWorldPosition(px, py);
+
 
     UpdateAttacks(deltaTimeMs);
     UpdateNavFlowField(px, py);
@@ -40,7 +47,8 @@ void MyGame::Update(float deltaTimeMs)
 void MyGame::Render()
 {
    
-    renderer.RenderFrame(camera, player, nav, zombies, densityView);
+    renderer.RenderFrame(camera, player, nav, zombies, hives, densityView);
+    
 }
 
 void MyGame::Shutdown()
@@ -114,11 +122,17 @@ void MyGame::InitSystems()
     player.GetWorldPosition(px, py);
 
     // Zombies AFTER nav (so zombies can copy world bounds from nav)
+
+
+    hives.Init(); // add this
+
     zombies.Init(50000, nav);
     zombies.Spawn(10'000, px, py);
 
     // Attacks last (depends on zombies + camera)
     attacks.Init();
+
+    
 
     // Persistent state
     lastAimX = 0.0f;

@@ -13,6 +13,7 @@
 #include "ZombieSystem.h"
 #include "CameraSystem.h"
 #include "IsoProjector.h"
+#include "HiveSystem.h"
 
 // --------------------------------------------
 // Small helpers (local to this cpp)
@@ -47,12 +48,13 @@ void WorldRenderer::RenderFrame(
     Player& player,
     const NavGrid& nav,
     const ZombieSystem& zombies,
+    const HiveSystem& hives,
     bool densityView)
 {
     const float offX = camera.GetOffsetX();
     const float offY = camera.GetOffsetY();
 
-    RenderWorld(offX, offY, player, nav, zombies, densityView);
+    RenderWorld(offX, offY, player, nav, zombies, hives, densityView);
 }
 
 // --------------------------------------------
@@ -63,20 +65,25 @@ void WorldRenderer::RenderWorld(
     Player& player,
     const NavGrid& nav,
     const ZombieSystem& zombies,
+    const HiveSystem& hives,
     bool densityView)
 {
-    // Player is still 2D for now
-    player.Render(offX, offY);
-
     float px, py;
     player.GetWorldPosition(px, py);
 
-    // Maze / obstacles
+    // 1) Maze / obstacles (background debug)
     nav.DebugDrawBlocked(offX, offY);
 
-    // Zombies (2.5D iso)
+    // 2) Hives (yellow circles) in world space
+    hives.Render(offX, offY);
+
+    // 3) Zombies
     //RenderZombiesIso(offX, offY, zombies, densityView, px, py);
     RenderZombies2D(offX, offY, zombies, densityView);
+
+    // 4) Player on top so it stays readable
+    player.Render(offX, offY);
+
     // UI counts
     const int simCount = zombies.AliveCount();
 
@@ -202,7 +209,7 @@ void WorldRenderer::DrawIsoWedge(float sx, float sy, float size, float height,
     // Tip is (0, -size) so "forward" is UP in screen space when angleRad = 0
     const float lx1 = 0.0f;    const float ly1 = -size;
     const float lx2 = -size;   const float ly2 = size;
-    const float lx3 = size;   const float ly3 = size;
+    const float lx3 = size;    const float ly3 = size;
 
     float rx1, ry1, rx2, ry2, rx3, ry3;
     Rotate2D(lx1, ly1, c, s, rx1, ry1);
