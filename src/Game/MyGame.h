@@ -7,6 +7,9 @@
 #include "AttackSystem.h"
 #include "NavGrid.h"
 
+// New
+#include "WorldRenderer.h"
+
 class MyGame
 {
 public:
@@ -15,26 +18,19 @@ public:
     void Render();
     void Shutdown();
 
-    static void DrawZombieTri(float x, float y, float size, float r, float g, float b);
-    static float Clamp01(float v);
-
 private:
+    // Init
     void InitWorld();
     void InitObstacles();
     void InitSystems();
 
+    // Update
     void UpdateInput(float deltaTimeMs);
     void UpdatePlayer(float deltaTimeMs);
     void UpdateAttacks(float deltaTimeMs);
     void UpdateNavFlowField(float playerX, float playerY);
     void UpdateCamera(float deltaTimeMs, float playerX, float playerY);
     void UpdateZombies(float deltaTimeMs, float playerX, float playerY);
-
-    void RenderWorld(float offX, float offY);
-    void RenderZombies(float offX, float offY);
-    void RenderUI(int simCount, int drawnCount, int step);
-
-    
 
     AttackInput BuildAttackInput(const InputState& in);
 
@@ -46,9 +42,11 @@ private:
     AttackSystem attacks;
     NavGrid nav;
 
+    // New: all drawing lives here now
+    WorldRenderer renderer;
+
     bool densityView = false;
 
-    // Persistent per game state (no statics inside Update)
     float lastAimX = 0.0f;
     float lastAimY = 1.0f;
     int lastTargetCell = -1;
