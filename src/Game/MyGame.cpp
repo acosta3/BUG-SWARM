@@ -9,6 +9,7 @@ void MyGame::Init()
 
     float px, py;
     player.GetWorldPosition(px, py);
+    player.SetNavGrid(&nav);
 
     // 2) Camera next (so first frame is centered)
     camera.Init(1024.0f, 768.0f);
@@ -59,7 +60,7 @@ void MyGame::Init()
 
     // 4) Zombies AFTER nav (so zombies can copy world bounds from nav in Init)
     zombies.Init(50000, nav);          // <-- if you changed Init signature
-    zombies.Spawn(10'000, px, py);
+    zombies.Spawn(100, px, py);
 
     // 5) Attacks last (depends on zombies + camera existing)
     attacks.Init();

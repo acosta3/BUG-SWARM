@@ -2,6 +2,8 @@
 #include "../ContestAPI/app.h"
 #include <memory>
 
+class NavGrid;
+
 class Player
 {
 public:
@@ -17,6 +19,7 @@ public:
 
     void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
 
+    void SetNavGrid(const NavGrid* g) { nav = g; }
 
 private:
     std::unique_ptr<CSimpleSprite> sprite;
@@ -25,6 +28,11 @@ private:
     float moveX = 0.0f;
     float moveY = 0.0f;
     bool stopAnimPressed = false;
+
+    const NavGrid* nav = nullptr;
+
+    bool CircleHitsBlocked(float cx, float cy, float r) const;
+    void MoveWithCollision(float& x, float& y, float dx, float dy);
 
     enum Anim
     {

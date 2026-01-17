@@ -1,4 +1,5 @@
 ﻿#include "Player.h"
+#include "NavGrid.h"
 #include <cmath>
 
 void Player::Init()
@@ -68,10 +69,13 @@ void Player::Update(float deltaTime)
         sprite->GetPosition(x, y);
 
         const float dt = deltaTime / 1000.0f;
-        x += mx * speedPixelsPerSec * dt;
-        y += my * speedPixelsPerSec * dt;
+        const float dx = mx * speedPixelsPerSec * dt;
+        const float dy = my * speedPixelsPerSec * dt;
 
+        MoveWithCollision(x, y, dx, dy);
         sprite->SetPosition(x, y);
+
+      
 
         wasMovingLastFrame = true;
         return;
@@ -129,4 +133,43 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
     if (s > 5.0f) s = 5.0f;
 
     sprite->SetScale(s);
+}
+bool Player::CircleHitsBlocked(float cx, float cy, float r) const
+{
+    if (!nav) return false;
+
+    const float minX = cx - r;
+    const float maxX = cx + r;
+    const float minY = cy - r;
+    const float maxY = cy + r;
+
+    const float midX = cx;
+    const float midY = cy;
+
+    return nav->IsBlockedWorld(minX, minY) || // TL
+        nav->IsBlockedWorld(midX, minY) || // T
+        nav->IsBlockedWorld(maxX, minY) || // TR
+        nav->IsBlockedWorld(minX, midY) || // L
+        nav->IsBlockedWorld(maxX, midY) || // R
+        nav->IsBlockedWorld(minX, maxY) || // BL
+        nav->IsBlockedWorld(midX, maxY) || // B
+        nav->IsBlockedWorld(maxX, maxY);   // BR
+}
+
+void Player::MoveWithCollision(float& x, float& y, float dx, float dy)
+{
+    float s = sprite ? sprite->GetScale() : 1.0f;
+
+    const float baseR = 40.0f;          // 
+    const float r = baseR * s;
+
+    // X axis
+    float nx = x + dx;
+    if (!CircleHitsBlocked(nx, y, r))
+        x = nx;
+
+    // Y axis
+    float ny = y + dy;
+    if (!CircleHitsBlocked(x, ny, r))
+        y = ny;
 }

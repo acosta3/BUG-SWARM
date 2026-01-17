@@ -19,11 +19,20 @@ public:
 
     // Queries
     int   CellIndex(float x, float y) const;
-    bool  IsBlockedCell(int cellIndex) const { return blocked[cellIndex] != 0; }
-    bool IsBlockedWorld(float x, float y) const
+    bool IsBlockedCell(int cx, int cy) const
     {
-        return IsBlockedCell(CellIndex(x, y));
+        if (cx < 0 || cy < 0 || cx >= gridW || cy >= gridH) return true; // treat OOB as wall
+        return blocked[cy * gridW + cx] != 0;
     }
+
+    bool IsBlockedWorld(float wx, float wy) const
+    {
+        const int cx = (int)((wx - worldMinX) / cellSize);
+        const int cy = (int)((wy - worldMinY) / cellSize);
+        return IsBlockedCell(cx, cy);
+    }
+
+   
 
 
     float FlowXAtCell(int cellIndex) const { return flowX[cellIndex]; }
