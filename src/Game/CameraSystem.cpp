@@ -37,6 +37,7 @@ void CameraSystem::Update(float deltaTime)
         }
     }
 }
+//
 
 void CameraSystem::AddShake(float strengthPixels, float durationSec)
 {
