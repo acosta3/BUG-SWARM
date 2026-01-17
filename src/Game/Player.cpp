@@ -42,6 +42,12 @@ void Player::Init()
     RecomputeStatsFromScale(sprite->GetScale());
 }
 
+float Player::GetScale() const
+{
+    if (!sprite) return 1.0f;
+    return sprite->GetScale();
+}
+
 void Player::Update(float deltaTime)
 {
     if (!sprite) return;
@@ -152,7 +158,7 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     sprite->SetScale(s);
 
-    // This is the important part: scale changes drive speed and maxHP fairly
+    // Scale changes drive speed and maxHP fairly
     RecomputeStatsFromScale(s);
 }
 
@@ -189,14 +195,14 @@ void Player::RecomputeStatsFromScale(float s)
         // Smooth blend from small -> normal -> big
         if (s < 1.0f)
         {
-            float t = (s - smallS) / (1.0f - smallS); // smallS..1 -> 0..1
+            float t = (s - smallS) / (1.0f - smallS); // 0..1
             t = Clamp01(t);
             speedMult = Lerp(smallSpeed, normalSpeed, t);
             hpMult = Lerp(smallHP, normalHP, t);
         }
         else
         {
-            float t = (s - 1.0f) / (bigS - 1.0f); // 1..bigS -> 0..1
+            float t = (s - 1.0f) / (bigS - 1.0f); // 0..1
             t = Clamp01(t);
             speedMult = Lerp(normalSpeed, bigSpeed, t);
             hpMult = Lerp(normalHP, bigHP, t);
@@ -206,16 +212,14 @@ void Player::RecomputeStatsFromScale(float s)
     // Apply speed
     speedPixelsPerSec = baseSpeedPixelsPerSec * speedMult;
 
-    // Apply maxHP fairly without infinite-heal exploits:
-    // keep the SAME health percentage when maxHP changes.
+    // Apply maxHP fairly: preserve HP percentage (no infinite healing)
     const int oldMax = maxHealth;
     int newMax = (int)std::lround((float)baseMaxHealth * hpMult);
 
     if (newMax < 1) newMax = 1;
-    if (newMax > 999) newMax = 999; // safety clamp
+    if (newMax > 999) newMax = 999;
 
-    if (oldMax <= 0) maxHealth = newMax;
-    else maxHealth = newMax;
+    maxHealth = newMax;
 
     if (!dead)
     {

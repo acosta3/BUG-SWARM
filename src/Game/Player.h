@@ -29,6 +29,9 @@ public:
     int GetHealth() const { return health; }
     int GetMaxHealth() const { return maxHealth; }
 
+
+    float GetScale() const;
+
 private:
     // Health
     int health = 100;

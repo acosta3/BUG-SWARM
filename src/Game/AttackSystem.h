@@ -2,7 +2,7 @@
 
 class ZombieSystem;
 class CameraSystem;
-class HiveSystem;   // NEW
+class HiveSystem;
 
 struct AttackInput
 {
@@ -23,11 +23,12 @@ public:
     // Call once per frame
     void Update(float deltaTimeMs);
 
-    // Fire whichever attacks are pressed this frame
+    // NEW: pass playerScale in
     void Process(const AttackInput& in,
         float playerX, float playerY,
+        float playerScale,
         ZombieSystem& zombies,
-        HiveSystem& hives,          // NEW
+        HiveSystem& hives,
         CameraSystem& camera);
 
     // Debug UI
@@ -36,7 +37,6 @@ public:
     float GetMeteorCooldownMs() const { return meteorCooldownMs; }
 
 private:
-    // Cooldowns
     float pulseCooldownMs = 0.0f;
     float slashCooldownMs = 0.0f;
     float meteorCooldownMs = 0.0f;
@@ -44,7 +44,7 @@ private:
 private:
     void TickCooldown(float& cd, float dtMs);
 
-    void DoPulse(float playerX, float playerY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
-    void DoSlash(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
-    void DoMeteor(float playerX, float playerY, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
+    void DoPulse(float px, float py, float playerScale, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
+    void DoSlash(float px, float py, float playerScale, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
+    void DoMeteor(float px, float py, float playerScale, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera);
 };
