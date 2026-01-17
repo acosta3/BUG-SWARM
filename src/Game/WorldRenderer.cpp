@@ -75,8 +75,8 @@ void WorldRenderer::RenderWorld(
     nav.DebugDrawBlocked(offX, offY);
 
     // Zombies (2.5D iso)
-    RenderZombiesIso(offX, offY, zombies, densityView, px, py);
-
+    //RenderZombiesIso(offX, offY, zombies, densityView, px, py);
+    RenderZombies2D(offX, offY, zombies, densityView);
     // UI counts
     const int simCount = zombies.AliveCount();
 
