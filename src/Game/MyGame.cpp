@@ -159,7 +159,8 @@ void MyGame::UpdatePlayer(float deltaTimeMs)
 
     player.SetMoveInput(in.moveX, in.moveY);
     player.Update(deltaTimeMs);
-    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTimeMs);
+    player.ApplyScaleInput(input.GetState().scaleUpHeld, input.GetState().scaleDownHeld, deltaTimeMs);
+
 
     // Update last aim when moving
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;

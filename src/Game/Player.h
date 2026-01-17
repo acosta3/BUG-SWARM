@@ -1,3 +1,4 @@
+// Player.h
 #pragma once
 #include "../ContestAPI/app.h"
 #include <memory>
@@ -17,6 +18,7 @@ public:
 
     void GetWorldPosition(float& outX, float& outY) const;
 
+    // Call every frame from MyGame after input update
     void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
@@ -28,19 +30,27 @@ public:
     int GetMaxHealth() const { return maxHealth; }
 
 private:
+    // Health
     int health = 100;
     int maxHealth = 100;
     bool dead = false;
 
 private:
     std::unique_ptr<CSimpleSprite> sprite;
+
+    // Movement
     float speedPixelsPerSec = 200.0f;
+    float baseSpeedPixelsPerSec = 200.0f;
+    int   baseMaxHealth = 100;
 
     float moveX = 0.0f;
     float moveY = 0.0f;
     bool stopAnimPressed = false;
 
     const NavGrid* nav = nullptr;
+
+private:
+    void RecomputeStatsFromScale(float newScale);
 
     bool CircleHitsBlocked(float cx, float cy, float r) const;
     void MoveWithCollision(float& x, float& y, float dx, float dy);

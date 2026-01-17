@@ -1,6 +1,20 @@
-﻿#include "Player.h"
+﻿// Player.cpp
+#include "Player.h"
 #include "NavGrid.h"
 #include <cmath>
+#include <algorithm>
+
+static float Clamp01(float v)
+{
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+static float Lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
 
 void Player::Init()
 {
@@ -19,13 +33,18 @@ void Player::Init()
     sprite->CreateAnimation(ANIM_IDLE_LEFT, idleSpeed, { 8 });
     sprite->CreateAnimation(ANIM_IDLE_RIGHT, idleSpeed, { 16 });
     sprite->CreateAnimation(ANIM_IDLE_FWD, idleSpeed, { 24 });
+
+    // Baselines (normal form)
+    baseSpeedPixelsPerSec = speedPixelsPerSec;
+    baseMaxHealth = maxHealth;
+
+    // Ensure stats match starting scale
+    RecomputeStatsFromScale(sprite->GetScale());
 }
 
 void Player::Update(float deltaTime)
 {
     if (!sprite) return;
-
-   
 
     sprite->Update(deltaTime);
 
@@ -38,9 +57,9 @@ void Player::Update(float deltaTime)
     float mx = moveX;
     float my = moveY;
 
-    const float dead = 0.15f;
-    if (std::fabs(mx) < dead) mx = 0.0f;
-    if (std::fabs(my) < dead) my = 0.0f;
+    const float deadZone = 0.15f;
+    if (std::fabs(mx) < deadZone) mx = 0.0f;
+    if (std::fabs(my) < deadZone) my = 0.0f;
 
     const bool moving = (mx != 0.0f || my != 0.0f);
 
@@ -77,8 +96,6 @@ void Player::Update(float deltaTime)
         MoveWithCollision(x, y, dx, dy);
         sprite->SetPosition(x, y);
 
-      
-
         wasMovingLastFrame = true;
         return;
     }
@@ -88,9 +105,9 @@ void Player::Update(float deltaTime)
         switch (facing)
         {
         case FACE_RIGHT: sprite->SetAnimation(ANIM_IDLE_RIGHT, true); break;
-        case FACE_LEFT:  sprite->SetAnimation(ANIM_IDLE_LEFT, true); break;
-        case FACE_FWD:   sprite->SetAnimation(ANIM_IDLE_FWD, true); break;
-        case FACE_BACK:  sprite->SetAnimation(ANIM_IDLE_BACK, true); break;
+        case FACE_LEFT:  sprite->SetAnimation(ANIM_IDLE_LEFT, true);  break;
+        case FACE_FWD:   sprite->SetAnimation(ANIM_IDLE_FWD, true);   break;
+        case FACE_BACK:  sprite->SetAnimation(ANIM_IDLE_BACK, true);  break;
         }
     }
 
@@ -110,7 +127,6 @@ void Player::Render(float camOffsetX, float camOffsetY) const
     sprite->SetPosition(wx, wy); // restore world position
 }
 
-
 void Player::GetWorldPosition(float& outX, float& outY) const
 {
     if (!sprite) { outX = 0.0f; outY = 0.0f; return; }
@@ -123,18 +139,98 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     float s = sprite->GetScale();
 
-    // scale speed: units per second (tweak this)
+    // scale speed: units per second
     const float scalePerSec = 1.0f;
     const float dt = deltaTime / 1000.0f;
 
     if (scaleUpHeld)   s += scalePerSec * dt;
     if (scaleDownHeld) s -= scalePerSec * dt;
 
-    // clamp so it never goes invisible/negative
-    if (s < 0.1f) s = 0.1f;
-    if (s > 5.0f) s = 5.0f;
+    // clamp to your desired range (keeps gameplay readable)
+    if (s < 0.4f) s = 0.4f;
+    if (s > 2.0f) s = 2.0f;
 
     sprite->SetScale(s);
+
+    // This is the important part: scale changes drive speed and maxHP fairly
+    RecomputeStatsFromScale(s);
+}
+
+void Player::RecomputeStatsFromScale(float s)
+{
+    // Tier targets
+    const float smallS = 0.7f;
+    const float bigS = 1.3f;
+
+    const float smallSpeed = 1.25f;
+    const float smallHP = 0.60f;
+
+    const float normalSpeed = 1.00f;
+    const float normalHP = 1.00f;
+
+    const float bigSpeed = 0.75f;
+    const float bigHP = 1.60f;
+
+    float speedMult = 1.0f;
+    float hpMult = 1.0f;
+
+    if (s <= smallS)
+    {
+        speedMult = smallSpeed;
+        hpMult = smallHP;
+    }
+    else if (s >= bigS)
+    {
+        speedMult = bigSpeed;
+        hpMult = bigHP;
+    }
+    else
+    {
+        // Smooth blend from small -> normal -> big
+        if (s < 1.0f)
+        {
+            float t = (s - smallS) / (1.0f - smallS); // smallS..1 -> 0..1
+            t = Clamp01(t);
+            speedMult = Lerp(smallSpeed, normalSpeed, t);
+            hpMult = Lerp(smallHP, normalHP, t);
+        }
+        else
+        {
+            float t = (s - 1.0f) / (bigS - 1.0f); // 1..bigS -> 0..1
+            t = Clamp01(t);
+            speedMult = Lerp(normalSpeed, bigSpeed, t);
+            hpMult = Lerp(normalHP, bigHP, t);
+        }
+    }
+
+    // Apply speed
+    speedPixelsPerSec = baseSpeedPixelsPerSec * speedMult;
+
+    // Apply maxHP fairly without infinite-heal exploits:
+    // keep the SAME health percentage when maxHP changes.
+    const int oldMax = maxHealth;
+    int newMax = (int)std::lround((float)baseMaxHealth * hpMult);
+
+    if (newMax < 1) newMax = 1;
+    if (newMax > 999) newMax = 999; // safety clamp
+
+    if (oldMax <= 0) maxHealth = newMax;
+    else maxHealth = newMax;
+
+    if (!dead)
+    {
+        float hpPct = (oldMax > 0) ? ((float)health / (float)oldMax) : 1.0f;
+        int newHealth = (int)std::lround(hpPct * (float)maxHealth);
+
+        if (newHealth < 1) newHealth = 1;
+        if (newHealth > maxHealth) newHealth = maxHealth;
+
+        health = newHealth;
+    }
+    else
+    {
+        health = 0;
+    }
 }
 
 void Player::TakeDamage(int amount)
@@ -147,10 +243,9 @@ void Player::TakeDamage(int amount)
     if (health == 0)
     {
         dead = true;
-        if (sprite) sprite->SetAnimation(-1); // stop anim (if supported)
+        if (sprite) sprite->SetAnimation(-1);
     }
 }
-
 
 bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 {
@@ -164,21 +259,21 @@ bool Player::CircleHitsBlocked(float cx, float cy, float r) const
     const float midX = cx;
     const float midY = cy;
 
-    return nav->IsBlockedWorld(minX, minY) || // TL
-        nav->IsBlockedWorld(midX, minY) || // T
-        nav->IsBlockedWorld(maxX, minY) || // TR
-        nav->IsBlockedWorld(minX, midY) || // L
-        nav->IsBlockedWorld(maxX, midY) || // R
-        nav->IsBlockedWorld(minX, maxY) || // BL
-        nav->IsBlockedWorld(midX, maxY) || // B
-        nav->IsBlockedWorld(maxX, maxY);   // BR
+    return nav->IsBlockedWorld(minX, minY) ||
+        nav->IsBlockedWorld(midX, minY) ||
+        nav->IsBlockedWorld(maxX, minY) ||
+        nav->IsBlockedWorld(minX, midY) ||
+        nav->IsBlockedWorld(maxX, midY) ||
+        nav->IsBlockedWorld(minX, maxY) ||
+        nav->IsBlockedWorld(midX, maxY) ||
+        nav->IsBlockedWorld(maxX, maxY);
 }
 
 void Player::MoveWithCollision(float& x, float& y, float dx, float dy)
 {
-    float s = sprite ? sprite->GetScale() : 1.0f;
+    const float s = sprite ? sprite->GetScale() : 1.0f;
 
-    const float baseR = 40.0f;          // 
+    const float baseR = 40.0f;
     const float r = baseR * s;
 
     // X axis
