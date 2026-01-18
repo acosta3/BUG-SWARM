@@ -120,7 +120,39 @@ void MyGame::InitSystems()
     hives.Init();
 
     zombies.Init(kMaxZombies, nav);
-    zombies.Spawn(kMaxZombies / 2, px, py);
+    
+
+    const int totalToSpawn = kMaxZombies / 2;
+
+    // Get alive hives (however your HiveSystem exposes them)
+    // Option A: hives.GetHives() returns a vector/list of Hive with fields {x,y,alive}
+    const auto& hiveList = hives.GetHives();
+
+    int aliveCount = 0;
+    for (const auto& h : hiveList) if (h.alive) aliveCount++;
+
+    if (aliveCount <= 0)
+    {
+        // fallback: spawn near player if no hives
+        zombies.Spawn(totalToSpawn, px, py);
+    }
+    else
+    {
+        const int base = totalToSpawn / aliveCount;
+        int rem = totalToSpawn % aliveCount;
+
+        for (const auto& h : hiveList)
+        {
+            if (!h.alive) continue;
+
+            int n = base + (rem > 0 ? 1 : 0);
+            if (rem > 0) rem--;
+
+            if (n > 0)
+                zombies.Spawn(n, h.x, h.y);
+        }
+    }
+
 
     attacks.Init();
 

@@ -14,6 +14,11 @@ static float Rand01()
     return (float)std::rand() / (float)RAND_MAX;
 }
 
+static float RandRange(float a, float b)
+{
+    return a + (b - a) * Rand01();
+}
+
 static float DistSq(float ax, float ay, float bx, float by)
 {
     const float dx = ax - bx;
@@ -48,11 +53,68 @@ void HiveSystem::Init()
 {
     hives.clear();
 
-    AddHive(220.0f, 220.0f, 30.0f, 120.0f);
-    AddHive(900.0f, 250.0f, 30.0f, 120.0f);
-    AddHive(320.0f, 720.0f, 30.0f, 120.0f);
-    AddHive(860.0f, 650.0f, 30.0f, 120.0f);
-    AddHive(560.0f, 430.0f, 34.0f, 160.0f);
+    // If you want the SAME hive layout every run, keep this fixed seed.
+    // If you want different layout each run, remove this line and seed once in main with time.
+    std::srand(1337);
+
+    // World is roughly -1500..1500 (your note)
+    const float worldMin = -1500.0f;
+    const float worldMax = 1500.0f;
+
+    // Tuning knobs
+    const float margin = 220.0f;     // keep away from edges
+    const float minDist = 900.0f;    // spread out distance between hives
+    const int hiveCount = 5;
+    const int maxAttemptsPerHive = 700;
+
+    float placedX[hiveCount];
+    float placedY[hiveCount];
+    int placed = 0;
+
+    for (int i = 0; i < hiveCount; i++)
+    {
+        const bool isBossHive = (i == hiveCount - 1);
+        const float radius = isBossHive ? 34.0f : 30.0f;
+        const float hp = isBossHive ? 160.0f : 120.0f;
+
+        bool found = false;
+
+        for (int attempt = 0; attempt < maxAttemptsPerHive; attempt++)
+        {
+            const float x = RandRange(worldMin + margin, worldMax - margin);
+            const float y = RandRange(worldMin + margin, worldMax - margin);
+
+            bool ok = true;
+            for (int j = 0; j < placed; j++)
+            {
+                if (DistSq(x, y, placedX[j], placedY[j]) < (minDist * minDist))
+                {
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (!ok) continue;
+
+            AddHive(x, y, radius, hp);
+            placedX[placed] = x;
+            placedY[placed] = y;
+            placed++;
+            found = true;
+            break;
+        }
+
+        // Fallback: if it couldn't find a far-enough spot, still place it somewhere valid.
+        if (!found)
+        {
+            const float x = RandRange(worldMin + margin, worldMax - margin);
+            const float y = RandRange(worldMin + margin, worldMax - margin);
+            AddHive(x, y, radius, hp);
+            placedX[placed] = x;
+            placedY[placed] = y;
+            placed++;
+        }
+    }
 }
 
 void HiveSystem::AddHive(float x, float y, float radius, float hp)
