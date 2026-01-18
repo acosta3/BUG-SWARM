@@ -34,11 +34,9 @@ void Player::Init()
     sprite->CreateAnimation(ANIM_IDLE_RIGHT, idleSpeed, { 16 });
     sprite->CreateAnimation(ANIM_IDLE_FWD, idleSpeed, { 24 });
 
-    // Baselines (normal form)
     baseSpeedPixelsPerSec = speedPixelsPerSec;
     baseMaxHealth = maxHealth;
 
-    // Ensure stats match starting scale
     RecomputeStatsFromScale(sprite->GetScale());
 }
 
@@ -48,9 +46,40 @@ float Player::GetScale() const
     return sprite->GetScale();
 }
 
+void Player::SetWorldPosition(float x, float y)
+{
+    if (!sprite) return;
+    sprite->SetPosition(x, y);
+}
+
+void Player::Revive(bool fullHeal)
+{
+    dead = false;
+    stopAnimPressed = false;
+    wasMovingLastFrame = false;
+
+    // Clear any previous i-frames (MyGame will set new ones on respawn)
+    invulnMs = 0.0f;
+
+    if (fullHeal)
+        health = maxHealth;
+    else
+        health = std::clamp(health, 1, maxHealth);
+
+    if (sprite)
+        sprite->SetAnimation(ANIM_IDLE_FWD, true);
+}
+
 void Player::Update(float deltaTime)
 {
     if (!sprite) return;
+
+    // Tick invulnerability timer (ms)
+    if (invulnMs > 0.0f)
+    {
+        invulnMs -= deltaTime;
+        if (invulnMs < 0.0f) invulnMs = 0.0f;
+    }
 
     sprite->Update(deltaTime);
 
@@ -84,7 +113,6 @@ void Player::Update(float deltaTime)
         case FACE_BACK:  sprite->SetAnimation(ANIM_WALK_BACK);  break;
         }
 
-        // Normalize so diagonals are not faster
         float lenSq = mx * mx + my * my;
         if (lenSq > 1.0f)
         {
@@ -96,16 +124,13 @@ void Player::Update(float deltaTime)
         float x, y;
         sprite->GetPosition(x, y);
 
-        // ---- FIX: substep movement so dt spikes do not cause "speed bursts" or collision skipping ----
         float dt = deltaTime / 1000.0f;
-
-        // Safety cap so huge stalls do not explode simulation
         if (dt > 0.20f) dt = 0.20f;
 
-        const float maxStep = 1.0f / 60.0f; // ~16.67ms
+        const float maxStep = 1.0f / 60.0f;
         int steps = (int)std::ceil(dt / maxStep);
         if (steps < 1) steps = 1;
-        if (steps > 8) steps = 8;           // keep it cheap
+        if (steps > 8) steps = 8;
 
         const float stepDt = dt / (float)steps;
 
@@ -146,7 +171,7 @@ void Player::Render(float camOffsetX, float camOffsetY) const
     sprite->SetPosition(wx - camOffsetX, wy - camOffsetY);
     sprite->Draw();
 
-    sprite->SetPosition(wx, wy); // restore world position
+    sprite->SetPosition(wx, wy);
 }
 
 void Player::GetWorldPosition(float& outX, float& outY) const
@@ -161,28 +186,23 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     float s = sprite->GetScale();
 
-    // scale speed: units per second
     const float scalePerSec = 1.0f;
 
-    // ---- FIX: cap scaling dt so frame spikes do not cause big size and speed jumps ----
     float dt = deltaTime / 1000.0f;
-    if (dt > 0.0333f) dt = 0.0333f; // cap to ~30fps for scaling responsiveness
+    if (dt > 0.0333f) dt = 0.0333f;
 
     if (scaleUpHeld)   s += scalePerSec * dt;
     if (scaleDownHeld) s -= scalePerSec * dt;
 
-    // clamp to desired range
     s = std::clamp(s, 0.4f, 2.0f);
 
     sprite->SetScale(s);
 
-    // Scale changes drive speed and maxHP fairly
     RecomputeStatsFromScale(s);
 }
 
 void Player::RecomputeStatsFromScale(float s)
 {
-    // Tier targets
     const float smallS = 0.7f;
     const float bigS = 1.3f;
 
@@ -208,9 +228,8 @@ void Player::RecomputeStatsFromScale(float s)
         speedMult = bigSpeed;
         hpMult = bigHP;
     }
-    else 
+    else
     {
-        // Smooth blend from small -> normal -> big
         if (s < 1.0f)
         {
             float t = (s - smallS) / (1.0f - smallS);
@@ -227,10 +246,8 @@ void Player::RecomputeStatsFromScale(float s)
         }
     }
 
-    // Apply speed
     speedPixelsPerSec = baseSpeedPixelsPerSec * speedMult;
 
-    // Apply maxHP fairly: preserve HP percentage (no infinite healing)
     const int oldMax = maxHealth;
     int newMax = (int)std::lround((float)baseMaxHealth * hpMult);
 
@@ -258,13 +275,16 @@ void Player::RecomputeStatsFromScale(float s)
 void Player::Heal(float amount)
 {
     if (amount <= 0.0f) return;
-    health += amount;
+    health += (int)std::lround(amount);
     if (health > maxHealth) health = maxHealth;
 }
 
 void Player::TakeDamage(int amount)
 {
     if (dead) return;
+
+    // NEW: i-frames
+    if (invulnMs > 0.0f) return;
 
     health -= amount;
     if (health < 0) health = 0;
@@ -305,12 +325,10 @@ void Player::MoveWithCollision(float& x, float& y, float dx, float dy)
     const float baseR = 40.0f;
     const float r = baseR * s;
 
-    // X axis
     float nx = x + dx;
     if (!CircleHitsBlocked(nx, y, r))
         x = nx;
 
-    // Y axis
     float ny = y + dy;
     if (!CircleHitsBlocked(x, ny, r))
         y = ny;

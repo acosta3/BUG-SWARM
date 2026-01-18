@@ -161,6 +161,17 @@ static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, Zombi
     camera.AddShake(10.0f, 0.12f);
 }
 
+
+static void TriggerFearAOE(float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
+{
+   
+    const float fearRadius = 350.0f;
+    const float fearDurationMs = 1200.0f;
+
+    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
+    camera.AddShake(10.0f, 0.12f);
+}
+
 void AttackSystem::Process(const AttackInput& in,
     float playerX, float playerY,
     float playerScale,
@@ -290,7 +301,9 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
     if (killed > 0) camera.AddShake(6.0f, 0.08f);
     if (hitHive)    camera.AddShake(4.0f, 0.05f);
 
-    TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
+    TriggerFearAOE(px, py, zombies, camera);
+    
+    //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, float aimY,
@@ -360,7 +373,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     if (killed > 0) camera.AddShake(5.0f, 0.06f);
     if (hitHive)    camera.AddShake(5.0f, 0.06f);
 
-    TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
+    //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, float aimY,
@@ -412,7 +425,7 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     if (killed > 0) camera.AddShake(8.0f, 0.10f);
     if (hitHive)    camera.AddShake(9.0f, 0.12f);
 
-    TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
+    //TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
 }
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const

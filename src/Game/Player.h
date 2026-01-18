@@ -18,20 +18,35 @@ public:
 
     void GetWorldPosition(float& outX, float& outY) const;
 
-    // Call every frame from MyGame after input update
+    // Respawn helpers
+    void SetWorldPosition(float x, float y);
+    void Revive(bool fullHeal = true);
+
+    // Scale
     void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
 
+    // Health
     void Heal(float amount);
-public:
     void TakeDamage(int amount);
-    bool IsDead() const { return dead; }
-    int GetHealth() const { return health; }
-    int GetMaxHealth() const { return maxHealth; }
 
+    bool IsDead() const { return dead; }
+    int  GetHealth() const { return health; }
+    int  GetMaxHealth() const { return maxHealth; }
 
     float GetScale() const;
+
+    // Invulnerability (ms)
+    void GiveInvulnerability(float ms) { if (ms > invulnMs) invulnMs = ms; }
+    bool IsInvulnerable() const { return invulnMs > 0.0f; }
+    float GetInvulnMs() const { return invulnMs; }
+
+private:
+    void RecomputeStatsFromScale(float newScale);
+
+    bool CircleHitsBlocked(float cx, float cy, float r) const;
+    void MoveWithCollision(float& x, float& y, float dx, float dy);
 
 private:
     // Health
@@ -39,25 +54,22 @@ private:
     int maxHealth = 200;
     bool dead = false;
 
-private:
+    // NEW: i-frames timer
+    float invulnMs = 0.0f;
+
     std::unique_ptr<CSimpleSprite> sprite;
 
     // Movement
     float speedPixelsPerSec = 200.0f;
     float baseSpeedPixelsPerSec = 200.0f;
-    int   baseMaxHealth = 100;
+
+    int baseMaxHealth = 200;
 
     float moveX = 0.0f;
     float moveY = 0.0f;
     bool stopAnimPressed = false;
 
     const NavGrid* nav = nullptr;
-
-private:
-    void RecomputeStatsFromScale(float newScale);
-
-    bool CircleHitsBlocked(float cx, float cy, float r) const;
-    void MoveWithCollision(float& x, float& y, float dx, float dy);
 
     enum Anim
     {

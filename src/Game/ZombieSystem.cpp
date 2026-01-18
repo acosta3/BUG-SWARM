@@ -607,8 +607,8 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
 
     for (int i = 0; i < aliveCount; i++)
     {
-        if (type[i] == PURPLE_ELITE)
-            continue;
+        //if (type[i] == PURPLE_ELITE)
+        //    continue;
 
         const float dx = posX[i] - sourceX;
         const float dy = posY[i] - sourceY;

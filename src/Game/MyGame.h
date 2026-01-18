@@ -36,6 +36,18 @@ private:
 
     AttackInput BuildAttackInput(const InputState& in);
 
+    // Death / respawn flow
+    enum class LifeState
+    {
+        Playing,
+        DeathPause,
+        RespawnGrace
+    };
+
+    void BeginDeath(float playerX, float playerY);
+    void RespawnNow();
+    bool InputLocked() const;
+
 private:
     InputSystem input;
     Player player;
@@ -44,7 +56,6 @@ private:
     AttackSystem attacks;
     NavGrid nav;
     HiveSystem hives;
-
     WorldRenderer renderer;
 
     bool densityView = false;
@@ -53,6 +64,17 @@ private:
     float lastAimY = 1.0f;
     int lastTargetCell = -1;
 
-    // NEW: store dt so RenderFrame can animate popups
     float lastDtMs = 16.0f;
+
+    // Respawn location (same level)
+    float respawnX = 400.0f;
+    float respawnY = 400.0f;
+
+    // Life-state machine timers
+    LifeState life = LifeState::Playing;
+    float lifeTimerMs = 0.0f;
+
+    // Tuning knobs
+    float deathPauseMs = 900.0f;      // how long you stay dead with frozen input
+    float respawnGraceMs = 650.0f;    // how long input stays frozen after respawn
 };
