@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdint>
 
 #include "AttackSystem.h"
 #include "CameraSystem.h"
@@ -21,6 +22,19 @@ static constexpr float kScreenH = 768.0f;
 static constexpr int kFullDrawThreshold = 50000;
 static constexpr int kMaxDraw = 10000;
 
+static constexpr float kPi = 3.14159265358979323846f;
+
+// Cheap deterministic hash -> [0,1)
+static float Hash01(uint32_t v)
+{
+    v ^= v >> 16;
+    v *= 0x7feb352dU;
+    v ^= v >> 15;
+    v *= 0x846ca68bU;
+    v ^= v >> 16;
+    return (float)(v & 0x00FFFFFFu) / (float)0x01000000u;
+}
+
 // --------------------------------------------
 // Public
 // --------------------------------------------
@@ -34,6 +48,10 @@ void WorldRenderer::RenderFrame(
     float dtMs,
     bool densityView)
 {
+    // NEW: advance wiggle time
+    animTimeSec += (dtMs * 0.001f);
+    if (animTimeSec > 100000.0f) animTimeSec = 0.0f;
+
     const float offX = camera.GetOffsetX();
     const float offY = camera.GetOffsetY();
 
@@ -159,7 +177,8 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
                 const float g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
                 const float b = 0.1f;
 
-                DrawZombieTri(x, y, cs * 0.45f, r, g, b);
+                // no wiggle in density view (cleaner)
+                DrawZombieTri(x, y, cs * 0.45f, 0.0f, r, g, b);
             }
         }
         return;
@@ -168,6 +187,11 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
     int step = 1;
     if (count > kFullDrawThreshold)
         step = (count + kMaxDraw - 1) / kMaxDraw;
+
+    // Wiggle tuning
+    const float baseFreq = 2.2f;     // Hz-ish feel
+    const float freqJitter = 1.1f;   // each bug a bit different
+    const float angleAmp = 0.22f;    // radians (about 12.6 deg), drop to 0.15f if too much
 
     for (int i = 0; i < count; i += step)
     {
@@ -190,7 +214,14 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
             b *= 0.25f;
         }
 
-        DrawZombieTri(x, y, sizeByType[t], r, g, b);
+        // NEW: per-zombie phase and slightly different speed
+        const uint32_t seed = (uint32_t)i * 2654435761u ^ (uint32_t)(t * 97u);
+        const float phase = Hash01(seed) * (2.0f * kPi);
+        const float freq = baseFreq + Hash01(seed ^ 0xA53A9E3Du) * freqJitter;
+
+        const float angle = std::sinf(animTimeSec * (2.0f * kPi) * freq + phase) * angleAmp;
+
+        DrawZombieTri(x, y, sizeByType[t], angle, r, g, b);
     }
 }
 
@@ -365,25 +396,53 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
     );
 }
 
-void WorldRenderer::DrawZombieTri(float x, float y, float size, float r, float g, float b)
+void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, float r, float g, float b)
 {
+    const float c = std::cos(angleRad);
+    const float s = std::sin(angleRad);
+
+    auto Rot = [&](float px, float py, float& ox, float& oy)
+        {
+            ox = px * c - py * s;
+            oy = px * s + py * c;
+        };
+
+    // Triangle points in local space
+    float ax, ay, bx, by, cx, cy;
+    Rot(0.0f, -size, ax, ay);
+    Rot(-size, size, bx, by);
+    Rot(size, size, cx, cy);
+
     App::DrawTriangle(
-        x, y - size, 0, 1,
-        x - size, y + size, 0, 1,
-        x + size, y + size, 0, 1,
+        x + ax, y + ay, 0, 1,
+        x + bx, y + by, 0, 1,
+        x + cx, y + cy, 0, 1,
         r, g, b, r, g, b, r, g, b, false
     );
 
+    // Legs in local space, then rotate them too
     const float lx = size * 1.3f;
     const float ly = size * 0.7f;
 
-    App::DrawLine(x - size * 0.6f, y, x - lx, y - ly, r, g, b);
-    App::DrawLine(x - size * 0.7f, y + size * 0.4f, x - lx, y + 0.0f, r, g, b);
-    App::DrawLine(x - size * 0.5f, y + size * 0.8f, x - lx, y + ly, r, g, b);
+    float p1x, p1y, p2x, p2y;
 
-    App::DrawLine(x + size * 0.6f, y, x + lx, y - ly, r, g, b);
-    App::DrawLine(x + size * 0.7f, y + size * 0.4f, x + lx, y + 0.0f, r, g, b);
-    App::DrawLine(x + size * 0.5f, y + size * 0.8f, x + lx, y + ly, r, g, b);
+    Rot(-size * 0.6f, 0.0f, p1x, p1y); Rot(-lx, -ly, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+
+    Rot(-size * 0.7f, size * 0.4f, p1x, p1y); Rot(-lx, 0.0f, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+
+    Rot(-size * 0.5f, size * 0.8f, p1x, p1y); Rot(-lx, ly, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+
+    Rot(size * 0.6f, 0.0f, p1x, p1y); Rot(lx, -ly, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+
+    Rot(size * 0.7f, size * 0.4f, p1x, p1y); Rot(lx, 0.0f, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+
+    Rot(size * 0.5f, size * 0.8f, p1x, p1y); Rot(lx, ly, p2x, p2y);
+    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 }
 
 float WorldRenderer::Clamp01(float v)

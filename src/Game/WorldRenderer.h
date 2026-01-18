@@ -53,10 +53,13 @@ private:
         float bgR, float bgG, float bgB,
         float fillR, float fillG, float fillB) const;
 
-    static void DrawZombieTri(float x, float y, float size, float r, float g, float b);
+    static void DrawZombieTri(float x, float y, float size, float angleRad, float r, float g, float b);
     static float Clamp01(float v);
 
 private:
     int   killPopupCount = 0;
     float killPopupTimeMs = 0.0f;
+
+    // NEW: global render time for wiggle
+    float animTimeSec = 0.0f;
 };

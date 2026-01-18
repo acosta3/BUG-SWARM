@@ -216,7 +216,7 @@ void MyGame::InitSystems()
 
     zombies.Init(kMaxZombies, nav);
 
-    const int totalToSpawn = kMaxZombies / 2;
+    const int totalToSpawn = kMaxZombies;
     const auto& hiveList = hives.GetHives();
 
     int aliveCount = 0;
