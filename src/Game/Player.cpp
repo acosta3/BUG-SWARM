@@ -186,13 +186,13 @@ void Player::RecomputeStatsFromScale(float s)
     const float smallS = 0.7f;
     const float bigS = 1.3f;
 
-    const float smallSpeed = 1.25f;
+    const float smallSpeed = 2.00f;
     const float smallHP = 0.60f;
 
     const float normalSpeed = 1.00f;
     const float normalHP = 1.00f;
 
-    const float bigSpeed = 0.75f;
+    const float bigSpeed = 0.50f;
     const float bigHP = 1.60f;
 
     float speedMult = 1.0f;
