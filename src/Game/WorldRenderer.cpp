@@ -227,8 +227,8 @@ void WorldRenderer::RenderUI(
     float pulseCdMs, float slashCdMs, float meteorCdMs)
 {
     // Bottom-left anchor (easy to read)
-    const float x = 18.0f;
-    const float y = 740.0f;
+    const float x = 500.0f;
+    const float y = 80.0f;
 
     App::Print((int)x, (int)y, densityView ? "View: Density (V/X)" : "View: Entities (V/X)");
 
