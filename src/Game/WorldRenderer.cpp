@@ -13,6 +13,12 @@
 #include "HiveSystem.h"
 #include "AttackSystem.h"
 
+static constexpr float kScreenW = 1024.0f;
+static constexpr float kScreenH = 768.0f;
+
+static constexpr int kFullDrawThreshold = 50000;
+static constexpr int kMaxDraw = 10000;
+
 // --------------------------------------------
 // Public
 // --------------------------------------------
@@ -36,11 +42,10 @@ void WorldRenderer::NotifyKills(int kills)
 {
     if (kills <= 0) return;
 
-    // If popup already active, stack kills into the same popup
     if (killPopupTimeMs > 0.0f) killPopupCount += kills;
     else killPopupCount = kills;
 
-    killPopupTimeMs = 900.0f; // show for ~0.9s
+    killPopupTimeMs = 900.0f;
 }
 
 // --------------------------------------------
@@ -59,20 +64,17 @@ void WorldRenderer::RenderWorld(
     float px, py;
     player.GetWorldPosition(px, py);
 
-    // Background debug
+    const float playerScreenX = px - offX;
+    const float playerScreenY = py - offY;
+
     nav.DebugDrawBlocked(offX, offY);
-
-    // Hives
     hives.Render(offX, offY);
-
-    // Zombies
     RenderZombies2D(offX, offY, zombies, densityView);
-
-    // Player
     player.Render(offX, offY);
-
     attacks.RenderFX(offX, offY);
 
+    // Kill popup now follows the player
+    RenderKillPopupOverPlayer(playerScreenX, playerScreenY, dtMs);
 
     // UI numbers
     const int simCount = zombies.AliveCount();
@@ -92,24 +94,25 @@ void WorldRenderer::RenderWorld(
     }
     else
     {
-        const int fullDrawThreshold = 50000;
-        const int maxDraw = 10000;
-
-        if (simCount > fullDrawThreshold)
-            step = (simCount + maxDraw - 1) / maxDraw;
+        if (simCount > kFullDrawThreshold)
+            step = (simCount + kMaxDraw - 1) / kMaxDraw;
 
         drawn = (simCount + step - 1) / step;
     }
+
+    const int hAlive = hives.AliveCount();
+    const int hTotal = hives.TotalCount();
 
     RenderUI(
         simCount, maxCount,
         drawn, step,
         densityView,
         player.GetHealth(), player.GetMaxHealth(),
+        hAlive, hTotal,
         attacks.GetPulseCooldownMs(),
         attacks.GetSlashCooldownMs(),
-        attacks.GetMeteorCooldownMs(),
-        dtMs);
+        attacks.GetMeteorCooldownMs()
+    );
 }
 
 // --------------------------------------------
@@ -146,36 +149,31 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
                 const float x = worldX - offX;
                 const float y = worldY - offY;
 
-                if (x < 0.0f || x > 1024.0f || y < 0.0f || y > 768.0f)
+                if (x < 0.0f || x > kScreenW || y < 0.0f || y > kScreenH)
                     continue;
 
-                const float denom = 20.0f;
-                const float intensity = Clamp01((float)n / denom);
+                const float intensity = Clamp01((float)n / 20.0f);
 
                 const float r = intensity;
                 const float g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
                 const float b = 0.1f;
 
-                const float size = cs * 0.45f;
-                DrawZombieTri(x, y, size, r, g, b);
+                DrawZombieTri(x, y, cs * 0.45f, r, g, b);
             }
         }
         return;
     }
 
-    const int fullDrawThreshold = 50000;
-    const int maxDraw = 10000;
-
     int step = 1;
-    if (count > fullDrawThreshold)
-        step = (count + maxDraw - 1) / maxDraw;
+    if (count > kFullDrawThreshold)
+        step = (count + kMaxDraw - 1) / kMaxDraw;
 
     for (int i = 0; i < count; i += step)
     {
         float x = zombies.GetX(i) - offX;
         float y = zombies.GetY(i) - offY;
 
-        if (x < 0.0f || x > 1024.0f || y < 0.0f || y > 768.0f)
+        if (x < 0.0f || x > kScreenW || y < 0.0f || y > kScreenH)
             continue;
 
         const int t = zombies.GetType(i);
@@ -196,7 +194,7 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
 }
 
 // --------------------------------------------
-// UI helpers (line fill like HiveSystem)
+// UI helpers
 // --------------------------------------------
 void WorldRenderer::DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const
 {
@@ -221,7 +219,6 @@ void WorldRenderer::DrawBarLines(
         const float yy = y + (float)i;
 
         App::DrawLine(x, yy, x + w, yy, bgR, bgG, bgB);
-
         if (fillW > 0.5f)
             App::DrawLine(x, yy, x + fillW, yy, fillR, fillG, fillB);
     }
@@ -237,10 +234,9 @@ void WorldRenderer::RenderUI(
     int drawnCount, int step,
     bool densityView,
     int hp, int maxHp,
-    float pulseCdMs, float slashCdMs, float meteorCdMs,
-    float dtMs)
+    int hivesAlive, int hivesTotal,
+    float pulseCdMs, float slashCdMs, float meteorCdMs)
 {
-    // Bottom-left anchor (easy to read)
     const float x = 500.0f;
     const float y = 80.0f;
 
@@ -276,50 +272,121 @@ void WorldRenderer::RenderUI(
     DrawBarLines(x + 240.0f, y - 70.0f, 110.0f, 10.0f, slashT, 0.15f, 0.15f, 0.15f, 0.95f, 0.50f, 0.20f);
     DrawBarLines(x + 360.0f, y - 70.0f, 110.0f, 10.0f, meteorT, 0.15f, 0.15f, 0.15f, 0.95f, 0.20f, 0.20f);
 
-    // --- Kill popup (top-ish) ---
-    if (killPopupTimeMs > 0.0f)
-    {
-        killPopupTimeMs -= dtMs;
-        if (killPopupTimeMs < 0.0f) killPopupTimeMs = 0.0f;
-
-        char kb[64];
-        std::snprintf(kb, sizeof(kb), "+%d KILLS", killPopupCount);
-        App::Print(440, 720, kb);
-
-        const float t = Clamp01(killPopupTimeMs / 900.0f);
-        DrawBarLines(430.0f, 708.0f, 200.0f, 6.0f, t,
-            0.10f, 0.10f, 0.10f,
-            1.00f, 0.90f, 0.20f);
-    }
-    else
-    {
-        killPopupCount = 0;
-    }
+    // Keep nest position the same
+    char bufH[128];
+    std::snprintf(bufH, sizeof(bufH), "Nests: %d/%d alive", hivesAlive, hivesTotal);
+    App::Print(440, 700, bufH);
 }
 
 // --------------------------------------------
-// Tri helper
+// Kill popup above player
 // --------------------------------------------
+void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerScreenY, float dtMs)
+{
+    if (killPopupTimeMs <= 0.0f)
+    {
+        killPopupCount = 0;
+        return;
+    }
+
+    killPopupTimeMs -= dtMs;
+    if (killPopupTimeMs < 0.0f) killPopupTimeMs = 0.0f;
+
+    // Position above player
+    float x = playerScreenX - 40.0f;
+    float y = playerScreenY - 60.0f;
+
+    // Clamp so it does not go off screen
+    x = std::clamp(x, 10.0f, kScreenW - 260.0f); // widened for extra text room
+    y = std::clamp(y, 10.0f, kScreenH - 30.0f);
+
+    // --- Tier style based on kill count ---
+    float r = 1.0f, g = 0.90f, b = 0.20f;  // yellow-ish
+    int thicknessPasses = 1;
+    float popY = 0.0f;
+
+    const char* suffix = "";     // NEW: tier text (default none)
+
+    if (killPopupCount >= 100 && killPopupCount < 1000)
+    {
+        r = 1.0f; g = 0.55f; b = 0.10f;     // orange
+        thicknessPasses = 2;
+        suffix = "  KILL FRENZY";            // NEW
+    }
+    else if (killPopupCount >= 1000)
+    {
+        r = 1.0f; g = 0.15f; b = 0.15f;     // red
+        thicknessPasses = 4;
+        suffix = "  UNSTOPPABLE ALL CHAOS";  // NEW
+
+        // small pop upward at start, then settles
+        const float t01 = Clamp01(killPopupTimeMs / 900.0f); // 1 -> 0
+        popY = (1.0f - t01) * -10.0f;
+    }
+
+    char kb[64];
+    std::snprintf(kb, sizeof(kb), "+%d KILLS", killPopupCount);
+
+    const int ix = (int)x;
+    const int iy = (int)(y + popY);
+
+    auto PrintThick = [&](int px, int py, const char* text)
+        {
+            if (thicknessPasses <= 1)
+            {
+                App::Print(px, py, text, r, g, b);
+            }
+            else if (thicknessPasses == 2)
+            {
+                App::Print(px, py, text, r, g, b);
+                App::Print(px + 1, py + 1, text, r, g, b);
+            }
+            else
+            {
+                App::Print(px, py, text, r, g, b);
+                App::Print(px + 1, py, text, r, g, b);
+                App::Print(px, py + 1, text, r, g, b);
+                App::Print(px + 1, py + 1, text, r, g, b);
+            }
+        };
+
+    // Main kill text
+    PrintThick(ix, iy, kb);
+
+    // NEW: extra tier text beside it
+    if (suffix[0] != '\0')
+    {
+        // crude width estimate: 10 px per char, enough for UI-only
+        const int approxWidth = (int)std::strlen(kb) * 10;
+        PrintThick(ix + approxWidth + 10, iy, suffix);
+    }
+
+    // Progress bar tinted to match
+    const float t = Clamp01(killPopupTimeMs / 900.0f);
+    DrawBarLines(x, (y - 12.0f) + popY, 180.0f, 6.0f, t,
+        0.10f, 0.10f, 0.10f,
+        r, g, b);
+}
+
 void WorldRenderer::DrawZombieTri(float x, float y, float size, float r, float g, float b)
 {
-    const float p1x = x;
-    const float p1y = y - size;
-
-    const float p2x = x - size;
-    const float p2y = y + size;
-
-    const float p3x = x + size;
-    const float p3y = y + size;
-
     App::DrawTriangle(
-        p1x, p1y, 0.0f, 1.0f,
-        p2x, p2y, 0.0f, 1.0f,
-        p3x, p3y, 0.0f, 1.0f,
-        r, g, b,
-        r, g, b,
-        r, g, b,
-        false
+        x, y - size, 0, 1,
+        x - size, y + size, 0, 1,
+        x + size, y + size, 0, 1,
+        r, g, b, r, g, b, r, g, b, false
     );
+
+    const float lx = size * 1.3f;
+    const float ly = size * 0.7f;
+
+    App::DrawLine(x - size * 0.6f, y, x - lx, y - ly, r, g, b);
+    App::DrawLine(x - size * 0.7f, y + size * 0.4f, x - lx, y + 0.0f, r, g, b);
+    App::DrawLine(x - size * 0.5f, y + size * 0.8f, x - lx, y + ly, r, g, b);
+
+    App::DrawLine(x + size * 0.6f, y, x + lx, y - ly, r, g, b);
+    App::DrawLine(x + size * 0.7f, y + size * 0.4f, x + lx, y + 0.0f, r, g, b);
+    App::DrawLine(x + size * 0.5f, y + size * 0.8f, x + lx, y + ly, r, g, b);
 }
 
 float WorldRenderer::Clamp01(float v)

@@ -41,8 +41,10 @@ private:
         int drawnCount, int step,
         bool densityView,
         int hp, int maxHp,
-        float pulseCdMs, float slashCdMs, float meteorCdMs,
-        float dtMs);
+        int hivesAlive, int hivesTotal,
+        float pulseCdMs, float slashCdMs, float meteorCdMs);
+
+    void RenderKillPopupOverPlayer(float playerScreenX, float playerScreenY, float dtMs);
 
     void DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const;
 

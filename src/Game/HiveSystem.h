@@ -29,6 +29,8 @@ public:
     bool DamageHiveAt(float wx, float wy, float hitRadius, float damage);
     int AliveCount() const;
     const std::vector<Hive>& GetHives() const { return hives; }
+    int TotalCount() const { return (int)hives.size(); }
+
 
 
 private:
