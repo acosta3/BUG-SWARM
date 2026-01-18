@@ -208,7 +208,7 @@ void Player::RecomputeStatsFromScale(float s)
         speedMult = bigSpeed;
         hpMult = bigHP;
     }
-    else
+    else 
     {
         // Smooth blend from small -> normal -> big
         if (s < 1.0f)
