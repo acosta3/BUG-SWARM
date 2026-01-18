@@ -105,13 +105,15 @@ void AttackSystem::Process(const AttackInput& in,
     if (in.pulsePressed && pulseCooldownMs <= 0.0f)
     {
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
-        pulseCooldownMs = 200.0f;
+       
+        pulseCooldownMs = 500.0f;
     }
 
     if (in.slashPressed && slashCooldownMs <= 0.0f)
     {
         DoSlash(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
-        slashCooldownMs = 350.0f;
+        App::PlayAudio("./Data/TestData/slash.mp3", false); // game music
+        slashCooldownMs = 200.0f;
     }
 
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
@@ -173,6 +175,8 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
         camera.AddShake(4.0f, 0.05f);
 
     TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
+
+   
 }
 
 void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)

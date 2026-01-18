@@ -1,6 +1,6 @@
 // AttackSystem.h
 #pragma once
-
+#include "../ContestAPI/app.h"
 class ZombieSystem;
 class CameraSystem;
 class HiveSystem;

@@ -84,6 +84,7 @@ void Player::Update(float deltaTime)
         case FACE_BACK:  sprite->SetAnimation(ANIM_WALK_BACK);  break;
         }
 
+        // Normalize so diagonals are not faster
         float lenSq = mx * mx + my * my;
         if (lenSq > 1.0f)
         {
@@ -95,11 +96,26 @@ void Player::Update(float deltaTime)
         float x, y;
         sprite->GetPosition(x, y);
 
-        const float dt = deltaTime / 1000.0f;
-        const float dx = mx * speedPixelsPerSec * dt;
-        const float dy = my * speedPixelsPerSec * dt;
+        // ---- FIX: substep movement so dt spikes do not cause "speed bursts" or collision skipping ----
+        float dt = deltaTime / 1000.0f;
 
-        MoveWithCollision(x, y, dx, dy);
+        // Safety cap so huge stalls do not explode simulation
+        if (dt > 0.20f) dt = 0.20f;
+
+        const float maxStep = 1.0f / 60.0f; // ~16.67ms
+        int steps = (int)std::ceil(dt / maxStep);
+        if (steps < 1) steps = 1;
+        if (steps > 8) steps = 8;           // keep it cheap
+
+        const float stepDt = dt / (float)steps;
+
+        for (int i = 0; i < steps; ++i)
+        {
+            const float dx = mx * speedPixelsPerSec * stepDt;
+            const float dy = my * speedPixelsPerSec * stepDt;
+            MoveWithCollision(x, y, dx, dy);
+        }
+
         sprite->SetPosition(x, y);
 
         wasMovingLastFrame = true;
@@ -111,9 +127,9 @@ void Player::Update(float deltaTime)
         switch (facing)
         {
         case FACE_RIGHT: sprite->SetAnimation(ANIM_IDLE_RIGHT, true); break;
-        case FACE_LEFT:  sprite->SetAnimation(ANIM_IDLE_LEFT, true);  break;
-        case FACE_FWD:   sprite->SetAnimation(ANIM_IDLE_FWD, true);   break;
-        case FACE_BACK:  sprite->SetAnimation(ANIM_IDLE_BACK, true);  break;
+        case FACE_LEFT:  sprite->SetAnimation(ANIM_IDLE_LEFT, true); break;
+        case FACE_FWD:   sprite->SetAnimation(ANIM_IDLE_FWD, true); break;
+        case FACE_BACK:  sprite->SetAnimation(ANIM_IDLE_BACK, true); break;
         }
     }
 
@@ -147,14 +163,16 @@ void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTi
 
     // scale speed: units per second
     const float scalePerSec = 1.0f;
-    const float dt = deltaTime / 1000.0f;
+
+    // ---- FIX: cap scaling dt so frame spikes do not cause big size and speed jumps ----
+    float dt = deltaTime / 1000.0f;
+    if (dt > 0.0333f) dt = 0.0333f; // cap to ~30fps for scaling responsiveness
 
     if (scaleUpHeld)   s += scalePerSec * dt;
     if (scaleDownHeld) s -= scalePerSec * dt;
 
-    // clamp to your desired range (keeps gameplay readable)
-    if (s < 0.4f) s = 0.4f;
-    if (s > 2.0f) s = 2.0f;
+    // clamp to desired range
+    s = std::clamp(s, 0.4f, 2.0f);
 
     sprite->SetScale(s);
 
@@ -195,14 +213,14 @@ void Player::RecomputeStatsFromScale(float s)
         // Smooth blend from small -> normal -> big
         if (s < 1.0f)
         {
-            float t = (s - smallS) / (1.0f - smallS); // 0..1
+            float t = (s - smallS) / (1.0f - smallS);
             t = Clamp01(t);
             speedMult = Lerp(smallSpeed, normalSpeed, t);
             hpMult = Lerp(smallHP, normalHP, t);
         }
         else
         {
-            float t = (s - 1.0f) / (bigS - 1.0f); // 0..1
+            float t = (s - 1.0f) / (bigS - 1.0f);
             t = Clamp01(t);
             speedMult = Lerp(normalSpeed, bigSpeed, t);
             hpMult = Lerp(normalHP, bigHP, t);

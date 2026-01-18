@@ -12,6 +12,7 @@ void MyGame::Init()
     InitWorld();
     InitObstacles();
     InitSystems();
+    App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true); // game music
 }
 
 void MyGame::Update(float deltaTimeMs)
