@@ -3,6 +3,8 @@
 #include "ZombieSystem.h"
 #include "HiveSystem.h"
 #include "CameraSystem.h"
+#include "../ContestAPI/app.h"
+
 #include <cmath>
 #include <algorithm>
 
@@ -65,6 +67,24 @@ static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMul
     }
 }
 
+// ------------------- NEW: shared slash tuning -------------------
+struct SlashParams
+{
+    float range = 600.0f;
+    float cosHalfAngle = 0.985f;
+};
+
+static SlashParams GetSlashParams(float radMult)
+{
+    SlashParams p;
+
+    // CHANGE THESE TWO and both gameplay + render match
+    p.range = 600.0f * radMult;   // longer/shorter slash
+    p.cosHalfAngle = 0.985f;      // wider/narrower cone (0.707=45deg, 0.866=30deg, 0.94=20deg)
+
+    return p;
+}
+
 void AttackSystem::Init()
 {
     pulseCooldownMs = 0.0f;
@@ -74,6 +94,16 @@ void AttackSystem::Init()
     lastPulseKills = 0;
     lastSlashKills = 0;
     lastMeteorKills = 0;
+
+    slashFx.active = false;
+    slashFx.timeMs = 0.0f;
+    slashFx.durMs = 80.0f;
+    slashFx.x = 0.0f;
+    slashFx.y = 0.0f;
+    slashFx.ax = 0.0f;
+    slashFx.ay = 1.0f;
+    slashFx.radMult = 1.0f;
+    slashFx.cosHalfAngle = 0.707f;
 }
 
 void AttackSystem::TickCooldown(float& cd, float dtMs)
@@ -88,6 +118,13 @@ void AttackSystem::Update(float deltaTimeMs)
     TickCooldown(pulseCooldownMs, deltaTimeMs);
     TickCooldown(slashCooldownMs, deltaTimeMs);
     TickCooldown(meteorCooldownMs, deltaTimeMs);
+
+    if (slashFx.active)
+    {
+        slashFx.timeMs += deltaTimeMs;
+        if (slashFx.timeMs >= slashFx.durMs)
+            slashFx.active = false;
+    }
 }
 
 void AttackSystem::Process(const AttackInput& in,
@@ -97,7 +134,6 @@ void AttackSystem::Process(const AttackInput& in,
     HiveSystem& hives,
     CameraSystem& camera)
 {
-    // Reset "last kills" each frame (only set when that move is used)
     lastPulseKills = 0;
     lastSlashKills = 0;
     lastMeteorKills = 0;
@@ -105,7 +141,6 @@ void AttackSystem::Process(const AttackInput& in,
     if (in.pulsePressed && pulseCooldownMs <= 0.0f)
     {
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
-       
         pulseCooldownMs = 500.0f;
         App::PlayAudio("./Data/TestData/AOE.mp3", false);
     }
@@ -114,8 +149,40 @@ void AttackSystem::Process(const AttackInput& in,
     {
         DoSlash(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
         slashCooldownMs = 200.0f;
-        App::PlayAudio("./Data/TestData/slash.mp3", false); // game music
-        
+        App::PlayAudio("./Data/TestData/slash.mp3", false);
+
+        // start slash visual fx
+        slashFx.active = true;
+        slashFx.timeMs = 0.0f;
+        slashFx.x = playerX;
+        slashFx.y = playerY;
+
+        // normalize aim
+        float ax = in.aimX;
+        float ay = in.aimY;
+        float len2 = ax * ax + ay * ay;
+        if (len2 > 0.0001f)
+        {
+            float inv = 1.0f / std::sqrt(len2);
+            ax *= inv;
+            ay *= inv;
+        }
+        else
+        {
+            ax = 0.0f;
+            ay = 1.0f;
+        }
+        slashFx.ax = ax;
+        slashFx.ay = ay;
+
+        // scale + cone width for render to match gameplay
+        float dmgDummy = 1.0f;
+        float radMult = 1.0f;
+        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+        slashFx.radMult = radMult;
+
+        const SlashParams sp = GetSlashParams(radMult);
+        slashFx.cosHalfAngle = sp.cosHalfAngle;
     }
 
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
@@ -159,7 +226,7 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
                 eliteKilled = true;
 
-            zombies.KillByPlayer(i); // IMPORTANT: no i++ (swap remove)
+            zombies.KillByPlayer(i);
             killed++;
             continue;
         }
@@ -172,24 +239,22 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
     const float hiveDamage = 20.0f * dmgMult;
     const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage);
 
-    if (killed > 0)
-        camera.AddShake(6.0f, 0.08f);
-    if (hitHive)
-        camera.AddShake(4.0f, 0.05f);
+    if (killed > 0) camera.AddShake(6.0f, 0.08f);
+    if (hitHive)    camera.AddShake(4.0f, 0.05f);
 
     TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
-
-   
 }
 
-void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
+void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, float aimY,
+    ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
 {
     float dmgMult, radMult;
     GetAttackMultsFromScale(playerScale, dmgMult, radMult);
 
-    const float range = 140.0f * radMult;
+    const SlashParams sp = GetSlashParams(radMult);
+    const float range = sp.range;
     const float range2 = range * range;
-    const float cosHalfAngle = 0.707f;
+    const float cosHalfAngle = sp.cosHalfAngle;
 
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
@@ -257,16 +322,14 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     const float hiveDamage = 30.0f * dmgMult;
     const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage);
 
-    if (killed > 0)
-        
-        camera.AddShake(5.0f, 0.06f);
-    if (hitHive)
-        camera.AddShake(5.0f, 0.06f);
+    if (killed > 0) camera.AddShake(5.0f, 0.06f);
+    if (hitHive)    camera.AddShake(5.0f, 0.06f);
 
     TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
-void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, float aimY, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
+void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, float aimY,
+    ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
 {
     float dmgMult, radMult;
     GetAttackMultsFromScale(playerScale, dmgMult, radMult);
@@ -318,10 +381,66 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     const float hiveDamage = 50.0f * dmgMult;
     const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage);
 
-    if (killed > 0)
-        camera.AddShake(8.0f, 0.10f);
-    if (hitHive)
-        camera.AddShake(9.0f, 0.12f);
+    if (killed > 0) camera.AddShake(8.0f, 0.10f);
+    if (hitHive)    camera.AddShake(9.0f, 0.12f);
 
     TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
+}
+
+void AttackSystem::RenderFX(float camOffX, float camOffY) const
+{
+    if (!slashFx.active) return;
+
+    float t = 1.0f - (slashFx.timeMs / slashFx.durMs);
+    t = Clamp01(t);
+
+    const SlashParams sp = GetSlashParams(slashFx.radMult);
+    const float range = sp.range;
+
+    float ax = slashFx.ax;
+    float ay = slashFx.ay;
+
+    float px = -ay;
+    float py = ax;
+
+    // Convert cosHalfAngle into "width" so render matches gameplay cone
+    float theta = std::acos(slashFx.cosHalfAngle);
+    float width = std::tan(theta); // narrower cone => smaller width
+
+    float e1x = ax + px * width;
+    float e1y = ay + py * width;
+    float e2x = ax - px * width;
+    float e2y = ay - py * width;
+
+    auto Norm = [](float& x, float& y)
+        {
+            float l2 = x * x + y * y;
+            if (l2 > 0.0001f)
+            {
+                float inv = 1.0f / std::sqrt(l2);
+                x *= inv;
+                y *= inv;
+            }
+            else
+            {
+                x = 0.0f;
+                y = 0.0f;
+            }
+        };
+
+    Norm(e1x, e1y);
+    Norm(e2x, e2y);
+
+    float sx = slashFx.x - camOffX;
+    float sy = slashFx.y - camOffY;
+
+    float ex1 = sx + e1x * range;
+    float ey1 = sy + e1y * range;
+    float ex2 = sx + e2x * range;
+    float ey2 = sy + e2y * range;
+
+    float c = t;
+    App::DrawLine(sx, sy, ex1, ey1, c, c, c);
+    App::DrawLine(sx, sy, ex2, ey2, c, c, c);
+    App::DrawLine(ex1, ey1, ex2, ey2, c, c, c);
 }

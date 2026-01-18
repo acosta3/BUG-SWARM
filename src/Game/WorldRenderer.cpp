@@ -71,6 +71,9 @@ void WorldRenderer::RenderWorld(
     // Player
     player.Render(offX, offY);
 
+    attacks.RenderFX(offX, offY);
+
+
     // UI numbers
     const int simCount = zombies.AliveCount();
     const int maxCount = zombies.MaxCount();
