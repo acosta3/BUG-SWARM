@@ -27,9 +27,9 @@ void MyGame::Update(float deltaTimeMs)
     }
 
 
-    hives.Update(deltaTimeMs);
 
     UpdatePlayer(deltaTimeMs);
+    hives.Update(deltaTimeMs, zombies, nav);
 
 
 
@@ -47,7 +47,9 @@ void MyGame::Update(float deltaTimeMs)
 void MyGame::Render()
 {
    
-    renderer.RenderFrame(camera, player, nav, zombies, hives, densityView);
+    renderer.RenderFrame(camera, player, nav, zombies, hives, attacks, densityView);
+
+
     
 }
 
@@ -126,8 +128,9 @@ void MyGame::InitSystems()
 
     hives.Init(); // add this
 
-    zombies.Init(50000, nav);
-    zombies.Spawn(10'000, px, py);
+    zombies.Init(kMaxZombies, nav);
+    zombies.Spawn(kMaxZombies/2, px, py); // or spawn less if you want a ramp
+
 
     // Attacks last (depends on zombies + camera)
     attacks.Init();

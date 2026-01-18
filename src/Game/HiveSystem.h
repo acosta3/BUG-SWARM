@@ -1,6 +1,9 @@
 #pragma once
 #include <vector>
 
+class ZombieSystem;
+class NavGrid;
+
 struct Hive
 {
     float x = 0.0f;
@@ -11,18 +14,19 @@ struct Hive
     float maxHp = 100.0f;
 
     bool alive = true;
+
+    float spawnPerMin = 100.0f;
+    float spawnAccum = 0.0f;
 };
 
 class HiveSystem
 {
 public:
     void Init();
-    void Update(float deltaTimeMs);
+    void Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid& nav);
     void Render(float camOffX, float camOffY) const;
 
-    // Returns true if any hive was hit
     bool DamageHiveAt(float wx, float wy, float hitRadius, float damage);
-
     int AliveCount() const;
 
 private:

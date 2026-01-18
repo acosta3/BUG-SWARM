@@ -118,6 +118,30 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     cellList.resize(maxCount);
 }
 
+bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
+{
+    if (aliveCount >= maxCount) return false;
+
+    const int i = aliveCount++;
+    const uint8_t t = (forcedType == 255) ? RollTypeWeighted() : forcedType;
+
+    posX[i] = x;
+    posY[i] = y;
+    velX[i] = 0.f;
+    velY[i] = 0.f;
+
+    type[i] = t;
+    state[i] = SEEK;
+
+    fearTimerMs[i] = 0.f;
+    attackCooldownMs[i] = 0.f;
+    hp[i] = typeStats[t].maxHP;
+
+    flowAssistMs[i] = 0.0f;
+    return true;
+}
+
+
 void ZombieSystem::InitTypeStats()
 {
     typeStats[GREEN] = { 60.f, 1.f, 1.f,  1, 1, 750.f,   0.f };

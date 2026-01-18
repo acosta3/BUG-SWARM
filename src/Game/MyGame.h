@@ -11,9 +11,15 @@
 // New
 #include "WorldRenderer.h"
 
+
+
+
 class MyGame
 {
 public:
+
+    static constexpr int kMaxZombies = 20'000;
+
     void Init();
     void Update(float deltaTimeMs);
     void Render();

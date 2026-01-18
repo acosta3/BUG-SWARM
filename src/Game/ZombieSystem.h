@@ -97,6 +97,14 @@ public:
     ZombieTuning& GetTuning() { return tuning; }
     const ZombieTuning& GetTuning() const { return tuning; }
 
+
+    int  MaxCount() const { return maxCount; }
+    bool CanSpawnMore(int n = 1) const { return (aliveCount + n) <= maxCount; }
+
+
+    bool SpawnAtWorld(float x, float y, uint8_t forcedType = 255);
+
+
 private:
     // ---- Init helpers ----
     void InitTypeStats();

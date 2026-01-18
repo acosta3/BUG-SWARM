@@ -34,8 +34,8 @@ public:
 
 private:
     // Health
-    int health = 100;
-    int maxHealth = 100;
+    int health = 200;
+    int maxHealth = 200;
     bool dead = false;
 
 private:

@@ -2,10 +2,17 @@
 #include "HiveSystem.h"
 
 #include "../ContestAPI/app.h"
+#include "ZombieSystem.h"
+#include "NavGrid.h"
+
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 
-
+static float Rand01()
+{
+    return (float)std::rand() / (float)RAND_MAX;
+}
 
 static float DistSq(float ax, float ay, float bx, float by)
 {
@@ -17,8 +24,10 @@ static float DistSq(float ax, float ay, float bx, float by)
 // Yellow circle using line segments
 static void DrawCircleLines(float cx, float cy, float r, float red, float green, float blue)
 {
+    static constexpr float kPi = 3.14159265358979323846f;
+
     const int segments = 28;
-    const float twoPi = 2.0f * PI;
+    const float twoPi = 2.0f * kPi;
 
     float prevX = cx + r;
     float prevY = cy;
@@ -39,7 +48,6 @@ void HiveSystem::Init()
 {
     hives.clear();
 
-    // All hives placed at the start of the game (no spawning hives later)
     AddHive(220.0f, 220.0f, 30.0f, 120.0f);
     AddHive(900.0f, 250.0f, 30.0f, 120.0f);
     AddHive(320.0f, 720.0f, 30.0f, 120.0f);
@@ -57,6 +65,9 @@ void HiveSystem::AddHive(float x, float y, float radius, float hp)
     h.maxHp = hp;
     h.alive = true;
 
+    h.spawnPerMin = 100.0f;
+    h.spawnAccum = 0.0f;
+
     hives.push_back(h);
 }
 
@@ -68,10 +79,53 @@ int HiveSystem::AliveCount() const
     return c;
 }
 
-void HiveSystem::Update(float /*deltaTimeMs*/)
+void HiveSystem::Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid& nav)
 {
-    // No hive spawn cooldown logic.
-    // Later hook: if you want bees to spawn from hives, we add it in BeeSystem instead.
+    const float dt = deltaTimeMs / 1000.0f;
+    if (dt <= 0.0f) return;
+
+    for (Hive& h : hives)
+    {
+        if (!h.alive) continue;
+
+        const float spawnPerSec = h.spawnPerMin / 60.0f;
+        h.spawnAccum += spawnPerSec * dt;
+
+        if (h.spawnAccum > 10.0f) h.spawnAccum = 10.0f;
+
+        while (h.spawnAccum >= 1.0f)
+        {
+            if (!zombies.CanSpawnMore(1))
+                return;
+
+            bool spawned = false;
+
+            for (int tries = 0; tries < 10; tries++)
+            {
+                const float ang = Rand01() * 6.2831853f;
+                const float rMin = h.radius + 10.0f;
+                const float rMax = h.radius + 55.0f;
+                const float rr = rMin + (rMax - rMin) * Rand01();
+
+                const float sx = h.x + std::cos(ang) * rr;
+                const float sy = h.y + std::sin(ang) * rr;
+
+                if (nav.IsBlockedWorld(sx, sy))
+                    continue;
+
+                if (zombies.SpawnAtWorld(sx, sy))
+                {
+                    spawned = true;
+                    break;
+                }
+            }
+
+            if (!spawned)
+                break;
+
+            h.spawnAccum -= 1.0f;
+        }
+    }
 }
 
 bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage)
@@ -105,16 +159,13 @@ void HiveSystem::Render(float camOffX, float camOffY) const
     {
         if (!h.alive) continue;
 
-        // World -> Screen
         const float sx = h.x - camOffX;
         const float sy = h.y - camOffY;
 
-        // Yellow circle (outline + inner rings)
         DrawCircleLines(sx, sy, h.radius, 1.0f, 1.0f, 0.0f);
         DrawCircleLines(sx, sy, h.radius * 0.7f, 1.0f, 0.9f, 0.0f);
         DrawCircleLines(sx, sy, h.radius * 0.4f, 1.0f, 0.8f, 0.0f);
 
-        // Small HP bar
         float t = (h.maxHp > 0.0f) ? (h.hp / h.maxHp) : 0.0f;
         t = std::clamp(t, 0.0f, 1.0f);
 
