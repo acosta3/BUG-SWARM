@@ -237,6 +237,13 @@ void Player::RecomputeStatsFromScale(float s)
     }
 }
 
+void Player::Heal(float amount)
+{
+    if (amount <= 0.0f) return;
+    health += amount;
+    if (health > maxHealth) health = maxHealth;
+}
+
 void Player::TakeDamage(int amount)
 {
     if (dead) return;

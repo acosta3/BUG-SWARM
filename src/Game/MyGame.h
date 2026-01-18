@@ -13,7 +13,7 @@
 class MyGame
 {
 public:
-    static constexpr int kMaxZombies = 50'000;
+    static constexpr int kMaxZombies = 10'000;
 
     void Init();
     void Update(float deltaTimeMs);

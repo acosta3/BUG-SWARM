@@ -251,6 +251,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage);
 
     if (killed > 0)
+        
         camera.AddShake(5.0f, 0.06f);
     if (hitHive)
         camera.AddShake(5.0f, 0.06f);

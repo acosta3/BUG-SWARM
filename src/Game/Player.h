@@ -23,6 +23,7 @@ public:
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
 
+    void Heal(float amount);
 public:
     void TakeDamage(int amount);
     bool IsDead() const { return dead; }

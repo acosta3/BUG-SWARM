@@ -77,39 +77,51 @@ void MyGame::InitWorld()
 
 void MyGame::InitObstacles()
 {
-    // Row 1
-    nav.AddObstacleRect(-420.0f, -260.0f, -380.0f, -220.0f);
-    nav.AddObstacleCircle(-300.0f, -240.0f, 22.0f);
-    nav.AddObstacleRect(-220.0f, -270.0f, -180.0f, -230.0f);
-    nav.AddObstacleCircle(-100.0f, -240.0f, 22.0f);
-    nav.AddObstacleRect(0.0f, -260.0f, 40.0f, -220.0f);
+    // Thin + spread version of your same pattern.
+ // Change these two knobs:
+    const float spread = 1.8f;   // >1 spreads out positions
+    const float half = 9.0f;   // half-size of each block (thickness/size)
+
+    auto AddBlock = [&](float cx, float cy)
+        {
+            // scale positions outward
+            const float x = cx * spread;
+            const float y = cy * spread;
+
+            // thin small square (you can make it a skinny wall by changing width/height separately)
+            nav.AddObstacleRect(x - half, y - half, x + half, y + half);
+        };
+
+    // Row 1 (centers from your original rects)
+    AddBlock(-400.0f, -240.0f);
+    AddBlock(-200.0f, -250.0f);
+    AddBlock(20.0f, -240.0f);
 
     // Row 2
-    nav.AddObstacleCircle(-380.0f, -120.0f, 22.0f);
-    nav.AddObstacleRect(-280.0f, -140.0f, -240.0f, -100.0f);
-    nav.AddObstacleCircle(-160.0f, -120.0f, 22.0f);
-    nav.AddObstacleRect(-60.0f, -140.0f, -20.0f, -100.0f);
-    nav.AddObstacleCircle(80.0f, -120.0f, 22.0f);
+    AddBlock(-260.0f, -120.0f);
+    AddBlock(-40.0f, -120.0f);
 
     // Row 3
-    nav.AddObstacleRect(-420.0f, 0.0f, -380.0f, 40.0f);
-    nav.AddObstacleCircle(-300.0f, 20.0f, 22.0f);
-    nav.AddObstacleRect(-220.0f, -10.0f, -180.0f, 30.0f);
-    nav.AddObstacleCircle(-100.0f, 20.0f, 22.0f);
-    nav.AddObstacleRect(0.0f, 0.0f, 40.0f, 40.0f);
+    AddBlock(-400.0f, 20.0f);
+    AddBlock(-200.0f, 10.0f);
+    AddBlock(20.0f, 20.0f);
 
     // Row 4
-    nav.AddObstacleCircle(-380.0f, 140.0f, 22.0f);
-    nav.AddObstacleRect(-280.0f, 120.0f, -240.0f, 160.0f);
-    nav.AddObstacleCircle(-160.0f, 140.0f, 22.0f);
-    nav.AddObstacleRect(-60.0f, 120.0f, -20.0f, 160.0f);
-    nav.AddObstacleCircle(80.0f, 140.0f, 22.0f);
+    AddBlock(-260.0f, 140.0f);
+    AddBlock(-40.0f, 140.0f);
 
-    // Bar
-    nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
+    // Bar (make it thinner + spread in position too)
+    {
+        float x0 = -300.0f * spread;
+        float x1 = 100.0f * spread;
+        float y = -187.5f * spread;   // center of -200..-175 is -187.5
+        const float barHalfH = 6.0f;   // thin bar thickness
 
-    // NOTE: you currently clear everything here, so obstacles won't exist.
-     //nav.ClearObstacles();
+        nav.AddObstacleRect(x0, y - barHalfH, x1, y + barHalfH);
+    }
+
+    // nav.ClearObstacles(); // keep this OFF
+
 }
 
 void MyGame::InitSystems()
@@ -228,6 +240,12 @@ void MyGame::UpdateAttacks(float deltaTimeMs)
     const AttackInput a = BuildAttackInput(in);
 
     attacks.Process(a, px, py, player.GetScale(), zombies, hives, camera);
+    const int kills = attacks.GetLastSlashKills(); // only pulse kills heal player for now
+    if (kills > 0)
+    {
+        const float healPerKill = 1.5f; // tune this
+        player.Heal(kills * healPerKill);
+    }
 }
 
 void MyGame::UpdateNavFlowField(float playerX, float playerY)

@@ -253,7 +253,7 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
     cy1 = std::clamp(cy1, 0, gridH - 1);
 
     // Style
-    const float r = 1.0f, g = 0.1f, b = 0.1f;
+    const float r = 0.70f, g = 0.95f, b = 1.00f;
 
     for (int cy = cy0; cy <= cy1; ++cy)
     {

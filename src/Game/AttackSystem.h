@@ -5,6 +5,7 @@ class ZombieSystem;
 class CameraSystem;
 class HiveSystem;
 
+
 struct AttackInput
 {
     bool pulsePressed = false;       // Space / B
@@ -42,6 +43,7 @@ public:
     int GetLastSlashKills() const { return lastSlashKills; }
     int GetLastMeteorKills() const { return lastMeteorKills; }
 
+   
 private:
     float pulseCooldownMs = 0.0f;
     float slashCooldownMs = 0.0f;
