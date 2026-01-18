@@ -107,19 +107,22 @@ void AttackSystem::Process(const AttackInput& in,
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
        
         pulseCooldownMs = 500.0f;
+        App::PlayAudio("./Data/TestData/AOE.mp3", false);
     }
 
     if (in.slashPressed && slashCooldownMs <= 0.0f)
     {
         DoSlash(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
-        App::PlayAudio("./Data/TestData/slash.mp3", false); // game music
         slashCooldownMs = 200.0f;
+        App::PlayAudio("./Data/TestData/slash.mp3", false); // game music
+        
     }
 
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
     {
         DoMeteor(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
         meteorCooldownMs = 900.0f;
+        App::PlayAudio("./Data/TestData/explode.mp3", false);
     }
 }
 

@@ -12,7 +12,7 @@ void MyGame::Init()
     InitWorld();
     InitObstacles();
     InitSystems();
-    App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true); // game music
+    App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true); // game music // should be able to turned off in the settings
 }
 
 void MyGame::Update(float deltaTimeMs)
