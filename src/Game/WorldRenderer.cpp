@@ -38,6 +38,34 @@ static inline void Rotate2D(float lx, float ly, float c, float s, float& outX, f
     outX = lx * c - ly * s;
     outY = lx * s + ly * c;
 }
+
+static inline void DrawInsetTriangle(
+    float x1, float y1,
+    float x2, float y2,
+    float x3, float y3,
+    float insetScale,
+    float r, float g, float b)
+{
+    const float cx = (x1 + x2 + x3) / 3.0f;
+    const float cy = (y1 + y2 + y3) / 3.0f;
+
+    const float s1x = cx + (x1 - cx) * insetScale;
+    const float s1y = cy + (y1 - cy) * insetScale;
+    const float s2x = cx + (x2 - cx) * insetScale;
+    const float s2y = cy + (y2 - cy) * insetScale;
+    const float s3x = cx + (x3 - cx) * insetScale;
+    const float s3y = cy + (y3 - cy) * insetScale;
+
+    App::DrawTriangle(
+        s1x, s1y, 0.0f, 1.0f,
+        s2x, s2y, 0.0f, 1.0f,
+        s3x, s3y, 0.0f, 1.0f,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+}
 static constexpr float HALF_PI = 1.57079632679489661923f;
 
 // --------------------------------------------
@@ -116,9 +144,9 @@ void WorldRenderer::RenderWorld(
 void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& zombies, bool densityView)
 {
     static const float sizeByType[4] = { 3.0f, 3.5f, 5.0f, 7.0f };
-    static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
-    static const float gByType[4] = { 1.0f, 0.2f, 0.4f, 0.2f };
-    static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
+    static const float rByType[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    static const float gByType[4] = { 0.88f, 0.72f, 0.92f, 0.65f };
+    static const float bByType[4] = { 0.12f, 0.08f, 0.18f, 0.06f };
 
     const int count = zombies.AliveCount();
 
@@ -237,6 +265,15 @@ void WorldRenderer::DrawIsoWedge(
         false
     );
 
+    // Bee stripe on top face
+    DrawInsetTriangle(
+        t1x, t1y,
+        t2x, t2y,
+        t3x, t3y,
+        0.6f,
+        0.1f, 0.08f, 0.02f
+    );
+
     // Side shades
     float rDark, gDark, bDark;
     float rMid, gMid, bMid;
@@ -300,9 +337,9 @@ void WorldRenderer::RenderZombiesIso(
     iso.WorldToScreen(playerX, playerY, 0.0f, psx, psy);
 
     static const float sizeByType[4] = { 3.5f, 4.0f, 5.0f, 7.0f };
-    static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
-    static const float gByType[4] = { 1.0f, 0.2f, 0.4f, 0.2f };
-    static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
+    static const float rByType[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    static const float gByType[4] = { 0.88f, 0.72f, 0.92f, 0.65f };
+    static const float bByType[4] = { 0.12f, 0.08f, 0.18f, 0.06f };
 
     const int count = zombies.AliveCount();
 
@@ -472,6 +509,15 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float r, float g
         r, g, b,
         r, g, b,
         false
+    );
+
+    const float stripeOffset = size * 0.2f;
+    DrawInsetTriangle(
+        p1x, p1y + stripeOffset,
+        p2x, p2y + stripeOffset,
+        p3x, p3y + stripeOffset,
+        0.55f,
+        0.1f, 0.08f, 0.02f
     );
 }
 
