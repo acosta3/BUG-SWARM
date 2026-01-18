@@ -1,6 +1,7 @@
 // Player.h
 #pragma once
 #include "../ContestAPI/app.h"
+
 #include <memory>
 
 class NavGrid;
@@ -9,7 +10,7 @@ class Player
 {
 public:
     void Init();
-    void Update(float deltaTime);
+    void Update(float dtMs);
     void Render(float camOffsetX, float camOffsetY) const;
 
     // Input intent (fed by MyGame)
@@ -23,7 +24,7 @@ public:
     void Revive(bool fullHeal = true);
 
     // Scale
-    void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime);
+    void ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float dtMs);
 
     void SetNavGrid(const NavGrid* g) { nav = g; }
 
@@ -38,7 +39,7 @@ public:
     float GetScale() const;
 
     // Invulnerability (ms)
-    void GiveInvulnerability(float ms) { if (ms > invulnMs) invulnMs = ms; }
+    void GiveInvulnerability(float ms);
     bool IsInvulnerable() const { return invulnMs > 0.0f; }
     float GetInvulnMs() const { return invulnMs; }
 
@@ -50,11 +51,11 @@ private:
 
 private:
     // Health
-    int health = 200;
-    int maxHealth = 200;
+    int  health = 200;
+    int  maxHealth = 200;
     bool dead = false;
 
-    // NEW: i-frames timer
+    // i-frames
     float invulnMs = 0.0f;
 
     std::unique_ptr<CSimpleSprite> sprite;
@@ -63,11 +64,12 @@ private:
     float speedPixelsPerSec = 200.0f;
     float baseSpeedPixelsPerSec = 200.0f;
 
+    // Must match initial maxHealth (so scaling math is consistent)
     int baseMaxHealth = 200;
 
     float moveX = 0.0f;
     float moveY = 0.0f;
-    bool stopAnimPressed = false;
+    bool  stopAnimPressed = false;
 
     const NavGrid* nav = nullptr;
 

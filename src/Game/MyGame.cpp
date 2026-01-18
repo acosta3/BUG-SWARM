@@ -1,12 +1,10 @@
 // MyGame.cpp
 #include "MyGame.h"
 #include "../ContestAPI/app.h"
-#include <cstdio>
-#include <cmath>
 
-// ------------------------------------------------------------
-// Public API
-// ------------------------------------------------------------
+#include <cmath>
+#include <cstdio>
+
 void MyGame::Init()
 {
     InitWorld();
@@ -16,25 +14,26 @@ void MyGame::Init()
     App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true);
 }
 
-void MyGame::Update(float deltaTimeMs)
+void MyGame::Update(float dtMs)
 {
-    lastDtMs = deltaTimeMs;
+    lastDtMs = dtMs;
 
-    float px, py;
+    float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
-    // Handle life-state timers first
+    // -----------------------------
+    // Life-state handling first
+    // -----------------------------
     if (life != LifeState::Playing)
     {
-        lifeTimerMs += deltaTimeMs;
+        lifeTimerMs += dtMs;
 
-        // Keep camera smooth even while input is locked / dead
-        UpdateCamera(deltaTimeMs, px, py);
+        // Camera stays smooth even while input is locked
+        UpdateCamera(dtMs, px, py);
 
-        // Optional: keep world sim running while dead (hives evolve, zombies move)
-        // If you want the whole world to freeze, comment these two lines.
-        hives.Update(deltaTimeMs, zombies, nav);
-        UpdateZombies(deltaTimeMs, px, py); // damage will be ignored while dead via IsDead() check inside BeginDeath logic
+        // World can keep simulating while dead/locked
+        hives.Update(dtMs, zombies, nav);
+        UpdateZombies(dtMs, px, py);
 
         if (life == LifeState::DeathPause)
         {
@@ -45,10 +44,10 @@ void MyGame::Update(float deltaTimeMs)
                 lifeTimerMs = 0.0f;
             }
         }
-        else if (life == LifeState::RespawnGrace)
+        else // RespawnGrace
         {
-            // During grace, you can still update attacks cooldowns visually
-            attacks.Update(deltaTimeMs);
+            // Cooldowns can tick during grace
+            attacks.Update(dtMs);
 
             if (lifeTimerMs >= respawnGraceMs)
             {
@@ -57,29 +56,31 @@ void MyGame::Update(float deltaTimeMs)
             }
         }
 
-        // Render popups still
         renderer.NotifyKills(zombies.ConsumeKillsThisFrame());
         return;
     }
 
+    // -----------------------------
     // Normal gameplay
-    UpdateInput(deltaTimeMs);
+    // -----------------------------
+    UpdateInput(dtMs);
 
-    UpdatePlayer(deltaTimeMs);
-    hives.Update(deltaTimeMs, zombies, nav);
+    UpdatePlayer(dtMs);
+    hives.Update(dtMs, zombies, nav);
 
     player.GetWorldPosition(px, py);
 
-    UpdateAttacks(deltaTimeMs);
+    UpdateAttacks(dtMs);
     UpdateNavFlowField(px, py);
-    UpdateCamera(deltaTimeMs, px, py);
+    UpdateCamera(dtMs, px, py);
 
-    UpdateZombies(deltaTimeMs, px, py);
+    UpdateZombies(dtMs, px, py);
 
-    // If player died this frame, enter death state
+    // If the player died this frame, enter death state
     if (player.IsDead())
     {
         BeginDeath(px, py);
+        renderer.NotifyKills(zombies.ConsumeKillsThisFrame());
         return;
     }
 
@@ -97,27 +98,31 @@ void MyGame::Shutdown()
 }
 
 // ------------------------------------------------------------
-// Init helpers
+// Init
 // ------------------------------------------------------------
 void MyGame::InitWorld()
 {
+    // Player
     player.Init();
 
-    float px, py;
+    float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
-    // Save spawn from initial position (so respawn is stable)
+    // Save spawn from initial position
     respawnX = px;
     respawnY = py;
 
     player.SetNavGrid(&nav);
 
+    // Camera
     camera.Init(1024.0f, 768.0f);
     camera.Follow(px, py);
 
+    // Nav
     nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f);
     nav.ClearObstacles();
 
+    // Life state
     life = LifeState::Playing;
     lifeTimerMs = 0.0f;
 }
@@ -134,43 +139,89 @@ void MyGame::InitObstacles()
             nav.AddObstacleRect(x - half, y - half, x + half, y + half);
         };
 
+    // -------------------------
+    // Core pattern (yours)
+    // -------------------------
+    // Row 1
     AddBlock(-400.0f, -240.0f);
     AddBlock(-200.0f, -250.0f);
     AddBlock(20.0f, -240.0f);
 
+    // Row 2
     AddBlock(-260.0f, -120.0f);
     AddBlock(-40.0f, -120.0f);
 
+    // Row 3
     AddBlock(-400.0f, 20.0f);
     AddBlock(-200.0f, 10.0f);
     AddBlock(20.0f, 20.0f);
 
+    // Row 4
     AddBlock(-260.0f, 140.0f);
     AddBlock(-40.0f, 140.0f);
 
+    // Thin bar (yours)
     {
         float x0 = -300.0f * spread;
         float x1 = 100.0f * spread;
         float y = -187.5f * spread;
         const float barHalfH = 6.0f;
-
         nav.AddObstacleRect(x0, y - barHalfH, x1, y + barHalfH);
     }
+
+    // -------------------------
+    // NEW: bigger "ring" around the play area
+    // Keeps the same spacing feel, but adds more structure on screen
+    // -------------------------
+
+    // Outer columns (left/right)
+    AddBlock(-560.0f, -240.0f);
+    AddBlock(-560.0f, -120.0f);
+    AddBlock(-560.0f, 20.0f);
+    AddBlock(-560.0f, 140.0f);
+
+    AddBlock(180.0f, -240.0f);
+    AddBlock(180.0f, -120.0f);
+    AddBlock(180.0f, 20.0f);
+    AddBlock(180.0f, 140.0f);
+
+    // Outer rows (top/bottom)
+    AddBlock(-400.0f, -360.0f);
+    AddBlock(-200.0f, -360.0f);
+    AddBlock(20.0f, -360.0f);
+
+    AddBlock(-400.0f, 260.0f);
+    AddBlock(-200.0f, 260.0f);
+    AddBlock(20.0f, 260.0f);
+
+    // Corner accents (makes the screen edges feel “designed”)
+    AddBlock(-560.0f, -360.0f);
+    AddBlock(180.0f, -360.0f);
+    AddBlock(-560.0f, 260.0f);
+    AddBlock(180.0f, 260.0f);
+
+    // Small inner accents to break empty space
+    AddBlock(-120.0f, -40.0f);
+    AddBlock(-120.0f, 90.0f);
+    AddBlock(-320.0f, -40.0f);
+    AddBlock(-320.0f, 90.0f);
 }
 
 void MyGame::InitSystems()
 {
-    float px, py;
+    float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
     hives.Init();
+
     zombies.Init(kMaxZombies, nav);
 
     const int totalToSpawn = kMaxZombies / 2;
     const auto& hiveList = hives.GetHives();
 
     int aliveCount = 0;
-    for (const auto& h : hiveList) if (h.alive) aliveCount++;
+    for (const auto& h : hiveList)
+        if (h.alive) aliveCount++;
 
     if (aliveCount <= 0)
     {
@@ -198,6 +249,7 @@ void MyGame::InitSystems()
     lastAimX = 0.0f;
     lastAimY = 1.0f;
     lastTargetCell = -1;
+
     lastDtMs = 16.0f;
 }
 
@@ -209,17 +261,17 @@ bool MyGame::InputLocked() const
     return (life != LifeState::Playing);
 }
 
-void MyGame::UpdateInput(float deltaTimeMs)
+void MyGame::UpdateInput(float dtMs)
 {
     input.SetEnabled(!InputLocked());
-    input.Update(deltaTimeMs);
+    input.Update(dtMs);
 
     const InputState& in = input.GetState();
     if (in.toggleViewPressed)
         densityView = !densityView;
 }
 
-void MyGame::UpdatePlayer(float deltaTimeMs)
+void MyGame::UpdatePlayer(float dtMs)
 {
     if (InputLocked())
     {
@@ -230,10 +282,11 @@ void MyGame::UpdatePlayer(float deltaTimeMs)
     const InputState& in = input.GetState();
 
     player.SetMoveInput(in.moveX, in.moveY);
-    player.Update(deltaTimeMs);
+    player.Update(dtMs);
 
-    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, deltaTimeMs);
+    player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, dtMs);
 
+    // Update last aim when moving
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
     if (len2 > 0.0001f)
     {
@@ -264,14 +317,14 @@ AttackInput MyGame::BuildAttackInput(const InputState& in)
     return a;
 }
 
-void MyGame::UpdateAttacks(float deltaTimeMs)
+void MyGame::UpdateAttacks(float dtMs)
 {
-    attacks.Update(deltaTimeMs);
+    attacks.Update(dtMs);
 
     if (InputLocked())
         return;
 
-    float px, py;
+    float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
     const InputState& in = input.GetState();
@@ -279,6 +332,7 @@ void MyGame::UpdateAttacks(float deltaTimeMs)
 
     attacks.Process(a, px, py, player.GetScale(), zombies, hives, camera);
 
+    // Healing rule (keep as you had it)
     const int kills = attacks.GetLastSlashKills();
     if (kills > 0)
     {
@@ -297,23 +351,22 @@ void MyGame::UpdateNavFlowField(float playerX, float playerY)
     }
 }
 
-void MyGame::UpdateCamera(float deltaTimeMs, float playerX, float playerY)
+void MyGame::UpdateCamera(float dtMs, float playerX, float playerY)
 {
     camera.Follow(playerX, playerY);
-    camera.Update(deltaTimeMs);
+    camera.Update(dtMs);
 }
 
-void MyGame::UpdateZombies(float deltaTimeMs, float playerX, float playerY)
+void MyGame::UpdateZombies(float dtMs, float playerX, float playerY)
 {
-    // If player is dead or input-locked states, we do not apply damage
-    // (they can still move, but cannot keep killing you on the respawn pause).
+    // During death/grace, zombies can move but cannot damage the player
     if (life != LifeState::Playing || player.IsDead())
     {
-        zombies.Update(deltaTimeMs, playerX, playerY, nav);
+        (void)zombies.Update(dtMs, playerX, playerY, nav);
         return;
     }
 
-    const int dmg = zombies.Update(deltaTimeMs, playerX, playerY, nav);
+    const int dmg = zombies.Update(dtMs, playerX, playerY, nav);
     if (dmg > 0)
         player.TakeDamage(dmg);
 }
@@ -323,28 +376,26 @@ void MyGame::UpdateZombies(float deltaTimeMs, float playerX, float playerY)
 // ------------------------------------------------------------
 void MyGame::BeginDeath(float playerX, float playerY)
 {
-    // Lock input and stop any accidental movement
     life = LifeState::DeathPause;
     lifeTimerMs = 0.0f;
 
     player.SetMoveInput(0.0f, 0.0f);
 
-    // Optional: set camera to keep following the last location
     camera.Follow(playerX, playerY);
 
-    // Reset aim so respawn attacks feel consistent
     lastAimX = 0.0f;
     lastAimY = 1.0f;
 }
 
 void MyGame::RespawnNow()
 {
-    player.Revive();
+    player.Revive(true);
     player.GiveInvulnerability(2000.0f);
+
     player.SetWorldPosition(respawnX, respawnY);
     player.SetNavGrid(&nav);
 
-    lastTargetCell = -1; // force flow field rebuild
+    lastTargetCell = -1;
     camera.Follow(respawnX, respawnY);
 
     player.SetMoveInput(0.0f, 0.0f);

@@ -2,16 +2,18 @@
 #include "WorldRenderer.h"
 
 #include "../ContestAPI/app.h"
-#include <cstdio>
-#include <cmath>
-#include <algorithm>
 
-#include "Player.h"
-#include "NavGrid.h"
-#include "ZombieSystem.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+#include "AttackSystem.h"
 #include "CameraSystem.h"
 #include "HiveSystem.h"
-#include "AttackSystem.h"
+#include "NavGrid.h"
+#include "Player.h"
+#include "ZombieSystem.h"
 
 static constexpr float kScreenW = 1024.0f;
 static constexpr float kScreenH = 768.0f;
@@ -61,7 +63,7 @@ void WorldRenderer::RenderWorld(
     float dtMs,
     bool densityView)
 {
-    float px, py;
+    float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
     const float playerScreenX = px - offX;
@@ -70,13 +72,12 @@ void WorldRenderer::RenderWorld(
     nav.DebugDrawBlocked(offX, offY);
     hives.Render(offX, offY);
     RenderZombies2D(offX, offY, zombies, densityView);
+
     player.Render(offX, offY);
     attacks.RenderFX(offX, offY);
 
-    // Kill popup now follows the player
     RenderKillPopupOverPlayer(playerScreenX, playerScreenY, dtMs);
 
-    // UI numbers
     const int simCount = zombies.AliveCount();
     const int maxCount = zombies.MaxCount();
 
@@ -170,8 +171,8 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
 
     for (int i = 0; i < count; i += step)
     {
-        float x = zombies.GetX(i) - offX;
-        float y = zombies.GetY(i) - offY;
+        const float x = zombies.GetX(i) - offX;
+        const float y = zombies.GetY(i) - offY;
 
         if (x < 0.0f || x > kScreenW || y < 0.0f || y > kScreenH)
             continue;
@@ -260,8 +261,11 @@ void WorldRenderer::RenderUI(
     );
 
     char bufCD[160];
-    std::snprintf(bufCD, sizeof(bufCD), "Cooldowns (ms)  Pulse: %.0f  Slash: %.0f  Meteor: %.0f",
-        pulseCdMs, slashCdMs, meteorCdMs);
+    std::snprintf(
+        bufCD, sizeof(bufCD),
+        "Cooldowns (ms)  Pulse: %.0f  Slash: %.0f  Meteor: %.0f",
+        pulseCdMs, slashCdMs, meteorCdMs
+    );
     App::Print((int)x, (int)(y - 54.0f), bufCD);
 
     const float pulseT = 1.0f - Clamp01(pulseCdMs / 200.0f);
@@ -272,7 +276,6 @@ void WorldRenderer::RenderUI(
     DrawBarLines(x + 240.0f, y - 70.0f, 110.0f, 10.0f, slashT, 0.15f, 0.15f, 0.15f, 0.95f, 0.50f, 0.20f);
     DrawBarLines(x + 360.0f, y - 70.0f, 110.0f, 10.0f, meteorT, 0.15f, 0.15f, 0.15f, 0.95f, 0.20f, 0.20f);
 
-    // Keep nest position the same
     char bufH[128];
     std::snprintf(bufH, sizeof(bufH), "Nests: %d/%d alive", hivesAlive, hivesTotal);
     App::Print(440, 700, bufH);
@@ -292,35 +295,31 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
     killPopupTimeMs -= dtMs;
     if (killPopupTimeMs < 0.0f) killPopupTimeMs = 0.0f;
 
-    // Position above player
     float x = playerScreenX - 40.0f;
     float y = playerScreenY - 60.0f;
 
-    // Clamp so it does not go off screen
-    x = std::clamp(x, 10.0f, kScreenW - 260.0f); // widened for extra text room
+    x = std::clamp(x, 10.0f, kScreenW - 260.0f);
     y = std::clamp(y, 10.0f, kScreenH - 30.0f);
 
-    // --- Tier style based on kill count ---
-    float r = 1.0f, g = 0.90f, b = 0.20f;  // yellow-ish
+    float r = 1.0f, g = 0.90f, b = 0.20f;
     int thicknessPasses = 1;
     float popY = 0.0f;
 
-    const char* suffix = "";     // NEW: tier text (default none)
+    const char* suffix = "";
 
     if (killPopupCount >= 100 && killPopupCount < 1000)
     {
-        r = 1.0f; g = 0.55f; b = 0.10f;     // orange
+        r = 1.0f; g = 0.55f; b = 0.10f;
         thicknessPasses = 2;
-        suffix = "  KILL FRENZY";            // NEW
+        suffix = "  KILL FRENZY";
     }
     else if (killPopupCount >= 1000)
     {
-        r = 1.0f; g = 0.15f; b = 0.15f;     // red
+        r = 1.0f; g = 0.15f; b = 0.15f;
         thicknessPasses = 4;
-        suffix = "  UNSTOPPABLE ALL CHAOS";  // NEW
+        suffix = "  UNSTOPPABLE ALL CHAOS";
 
-        // small pop upward at start, then settles
-        const float t01 = Clamp01(killPopupTimeMs / 900.0f); // 1 -> 0
+        const float t01 = Clamp01(killPopupTimeMs / 900.0f);
         popY = (1.0f - t01) * -10.0f;
     }
 
@@ -350,22 +349,20 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
             }
         };
 
-    // Main kill text
     PrintThick(ix, iy, kb);
 
-    // NEW: extra tier text beside it
     if (suffix[0] != '\0')
     {
-        // crude width estimate: 10 px per char, enough for UI-only
         const int approxWidth = (int)std::strlen(kb) * 10;
         PrintThick(ix + approxWidth + 10, iy, suffix);
     }
 
-    // Progress bar tinted to match
     const float t = Clamp01(killPopupTimeMs / 900.0f);
-    DrawBarLines(x, (y - 12.0f) + popY, 180.0f, 6.0f, t,
+    DrawBarLines(
+        x, (y - 12.0f) + popY, 180.0f, 6.0f, t,
         0.10f, 0.10f, 0.10f,
-        r, g, b);
+        r, g, b
+    );
 }
 
 void WorldRenderer::DrawZombieTri(float x, float y, float size, float r, float g, float b)
