@@ -37,19 +37,8 @@ static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMul
     const float bigDmg = 1.45f;
     const float bigRad = 1.80f;
 
-    if (s <= smallS)
-    {
-        outDmgMult = smallDmg;
-        outRadMult = smallRad;
-        return;
-    }
-
-    if (s >= bigS)
-    {
-        outDmgMult = bigDmg;
-        outRadMult = bigRad;
-        return;
-    }
+    if (s <= smallS) { outDmgMult = smallDmg; outRadMult = smallRad; return; }
+    if (s >= bigS) { outDmgMult = bigDmg;   outRadMult = bigRad;   return; }
 
     if (s < 1.0f)
     {
@@ -67,22 +56,51 @@ static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMul
     }
 }
 
-// ------------------- NEW: shared slash tuning -------------------
-struct SlashParams
-{
-    float range = 600.0f;
-    float cosHalfAngle = 0.985f;
-};
-
+// ------------------- shared tuning -------------------
+struct SlashParams { float range = 300.0f; float cosHalfAngle = 0.985f; };
 static SlashParams GetSlashParams(float radMult)
 {
     SlashParams p;
-
-    // CHANGE THESE TWO and both gameplay + render match
-    p.range = 600.0f * radMult;   // longer/shorter slash
-    p.cosHalfAngle = 0.985f;      // wider/narrower cone (0.707=45deg, 0.866=30deg, 0.94=20deg)
-
+    p.range = 300.0f * radMult;     // tune slash reach
+    p.cosHalfAngle = 0.985f;        // tune slash width
     return p;
+}
+
+struct PulseParams { float radius = 200.0f; };
+static PulseParams GetPulseParams(float radMult)
+{
+    PulseParams p;
+    p.radius = 200.0f * radMult;     // tune pulse radius
+    return p;
+}
+
+struct MeteorParams { float targetDist = 260.0f; float radius = 120.0f; };
+static MeteorParams GetMeteorParams(float radMult)
+{
+    MeteorParams p;
+    p.targetDist = 260.0f;          // tune how far meteor lands
+    p.radius = 120.0f * radMult;    // tune meteor blast radius
+    return p;
+}
+
+// ------------------- draw helper (circle made of lines) -------------------
+static void DrawCircleLinesApprox(float cx, float cy, float r, float cr, float cg, float cb, int segments = 24)
+{
+    if (segments < 8) segments = 8;
+    const float step = 6.28318530718f / (float)segments;
+
+    float prevX = cx + r;
+    float prevY = cy;
+
+    for (int i = 1; i <= segments; i++)
+    {
+        float a = step * (float)i;
+        float x = cx + std::cos(a) * r;
+        float y = cy + std::sin(a) * r;
+        App::DrawLine(prevX, prevY, x, y, cr, cg, cb);
+        prevX = x;
+        prevY = y;
+    }
 }
 
 void AttackSystem::Init()
@@ -95,15 +113,9 @@ void AttackSystem::Init()
     lastSlashKills = 0;
     lastMeteorKills = 0;
 
-    slashFx.active = false;
-    slashFx.timeMs = 0.0f;
-    slashFx.durMs = 80.0f;
-    slashFx.x = 0.0f;
-    slashFx.y = 0.0f;
-    slashFx.ax = 0.0f;
-    slashFx.ay = 1.0f;
-    slashFx.radMult = 1.0f;
-    slashFx.cosHalfAngle = 0.707f;
+    slashFx = SlashFX{};
+    pulseFx = PulseFX{};
+    meteorFx = MeteorFX{};
 }
 
 void AttackSystem::TickCooldown(float& cd, float dtMs)
@@ -122,9 +134,31 @@ void AttackSystem::Update(float deltaTimeMs)
     if (slashFx.active)
     {
         slashFx.timeMs += deltaTimeMs;
-        if (slashFx.timeMs >= slashFx.durMs)
-            slashFx.active = false;
+        if (slashFx.timeMs >= slashFx.durMs) slashFx.active = false;
     }
+
+    if (pulseFx.active)
+    {
+        pulseFx.timeMs += deltaTimeMs;
+        if (pulseFx.timeMs >= pulseFx.durMs) pulseFx.active = false;
+    }
+
+    if (meteorFx.active)
+    {
+        meteorFx.timeMs += deltaTimeMs;
+        if (meteorFx.timeMs >= meteorFx.durMs) meteorFx.active = false;
+    }
+}
+
+static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
+{
+    if (!eliteKilled) return;
+
+    const float fearRadius = 750.0f;
+    const float fearDurationMs = 1200.0f;
+
+    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
+    camera.AddShake(10.0f, 0.12f);
 }
 
 void AttackSystem::Process(const AttackInput& in,
@@ -143,6 +177,18 @@ void AttackSystem::Process(const AttackInput& in,
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
         pulseCooldownMs = 500.0f;
         App::PlayAudio("./Data/TestData/AOE.mp3", false);
+
+        // start pulse FX (centered on player)
+        float dmgDummy = 1.0f, radMult = 1.0f;
+        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+        const PulseParams pp = GetPulseParams(radMult);
+
+        pulseFx.active = true;
+        pulseFx.timeMs = 0.0f;
+        pulseFx.x = playerX;
+        pulseFx.y = playerY;
+        pulseFx.radMult = radMult;
+        pulseFx.radius = pp.radius;
     }
 
     if (in.slashPressed && slashCooldownMs <= 0.0f)
@@ -151,33 +197,24 @@ void AttackSystem::Process(const AttackInput& in,
         slashCooldownMs = 200.0f;
         App::PlayAudio("./Data/TestData/slash.mp3", false);
 
-        // start slash visual fx
+        // start slash FX
         slashFx.active = true;
         slashFx.timeMs = 0.0f;
         slashFx.x = playerX;
         slashFx.y = playerY;
 
-        // normalize aim
-        float ax = in.aimX;
-        float ay = in.aimY;
+        float ax = in.aimX, ay = in.aimY;
         float len2 = ax * ax + ay * ay;
         if (len2 > 0.0001f)
         {
             float inv = 1.0f / std::sqrt(len2);
-            ax *= inv;
-            ay *= inv;
+            ax *= inv; ay *= inv;
         }
-        else
-        {
-            ax = 0.0f;
-            ay = 1.0f;
-        }
+        else { ax = 0.0f; ay = 1.0f; }
         slashFx.ax = ax;
         slashFx.ay = ay;
 
-        // scale + cone width for render to match gameplay
-        float dmgDummy = 1.0f;
-        float radMult = 1.0f;
+        float dmgDummy = 1.0f, radMult = 1.0f;
         GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
         slashFx.radMult = radMult;
 
@@ -190,18 +227,31 @@ void AttackSystem::Process(const AttackInput& in,
         DoMeteor(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
         meteorCooldownMs = 900.0f;
         App::PlayAudio("./Data/TestData/explode.mp3", false);
+
+        // start meteor FX (at landing point)
+        float ax = in.aimX, ay = in.aimY;
+        float len2 = ax * ax + ay * ay;
+        if (len2 > 0.0001f)
+        {
+            float inv = 1.0f / std::sqrt(len2);
+            ax *= inv; ay *= inv;
+        }
+        else { ax = 0.0f; ay = 1.0f; }
+
+        float dmgDummy = 1.0f, radMult = 1.0f;
+        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+
+        const MeteorParams mp = GetMeteorParams(radMult);
+        const float tx = playerX + ax * mp.targetDist;
+        const float ty = playerY + ay * mp.targetDist;
+
+        meteorFx.active = true;
+        meteorFx.timeMs = 0.0f;
+        meteorFx.x = tx;
+        meteorFx.y = ty;
+        meteorFx.radMult = radMult;
+        meteorFx.radius = mp.radius;
     }
-}
-
-static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
-{
-    if (!eliteKilled) return;
-
-    const float fearRadius = 750.0f;
-    const float fearDurationMs = 1200.0f;
-
-    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
-    camera.AddShake(10.0f, 0.12f);
 }
 
 void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& zombies, HiveSystem& hives, CameraSystem& camera)
@@ -209,7 +259,8 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
     float dmgMult, radMult;
     GetAttackMultsFromScale(playerScale, dmgMult, radMult);
 
-    const float radius = 80.0f * radMult;
+    const PulseParams pp = GetPulseParams(radMult);
+    const float radius = pp.radius;
     const float r2 = radius * radius;
 
     int killed = 0;
@@ -223,14 +274,11 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
 
         if (d2 <= r2)
         {
-            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
-                eliteKilled = true;
-
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE) eliteKilled = true;
             zombies.KillByPlayer(i);
             killed++;
             continue;
         }
-
         i++;
     }
 
@@ -259,15 +307,10 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
     {
-        const float inv = 1.0f / std::sqrt(len2);
-        aimX *= inv;
-        aimY *= inv;
+        float inv = 1.0f / std::sqrt(len2);
+        aimX *= inv; aimY *= inv;
     }
-    else
-    {
-        aimX = 0.0f;
-        aimY = 1.0f;
-    }
+    else { aimX = 0.0f; aimY = 1.0f; }
 
     int killed = 0;
     bool eliteKilled = false;
@@ -278,18 +321,12 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
         const float zy = zombies.GetY(i) - py;
 
         const float d2 = zx * zx + zy * zy;
-        if (d2 > range2)
-        {
-            i++;
-            continue;
-        }
+        if (d2 > range2) { i++; continue; }
 
         const float d = std::sqrt(d2);
         if (d < 0.0001f)
         {
-            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
-                eliteKilled = true;
-
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE) eliteKilled = true;
             zombies.KillByPlayer(i);
             killed++;
             continue;
@@ -301,9 +338,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
         const float dot = nx * aimX + ny * aimY;
         if (dot >= cosHalfAngle)
         {
-            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
-                eliteKilled = true;
-
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE) eliteKilled = true;
             zombies.KillByPlayer(i);
             killed++;
             continue;
@@ -337,21 +372,16 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
     {
-        const float inv = 1.0f / std::sqrt(len2);
-        aimX *= inv;
-        aimY *= inv;
+        float inv = 1.0f / std::sqrt(len2);
+        aimX *= inv; aimY *= inv;
     }
-    else
-    {
-        aimX = 0.0f;
-        aimY = 1.0f;
-    }
+    else { aimX = 0.0f; aimY = 1.0f; }
 
-    const float targetDist = 260.0f;
-    const float tx = px + aimX * targetDist;
-    const float ty = py + aimY * targetDist;
+    const MeteorParams mp = GetMeteorParams(radMult);
+    const float tx = px + aimX * mp.targetDist;
+    const float ty = py + aimY * mp.targetDist;
 
-    const float radius = 120.0f * radMult;
+    const float radius = mp.radius;
     const float r2 = radius * radius;
 
     int killed = 0;
@@ -365,9 +395,7 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
         if (d2 <= r2)
         {
-            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
-                eliteKilled = true;
-
+            if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE) eliteKilled = true;
             zombies.KillByPlayer(i);
             killed++;
             continue;
@@ -389,58 +417,97 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const
 {
-    if (!slashFx.active) return;
+    // SLASH
+    if (slashFx.active)
+    {
+        float t = 1.0f - (slashFx.timeMs / slashFx.durMs);
+        t = Clamp01(t);
 
-    float t = 1.0f - (slashFx.timeMs / slashFx.durMs);
-    t = Clamp01(t);
+        const SlashParams sp = GetSlashParams(slashFx.radMult);
+        const float range = sp.range;
 
-    const SlashParams sp = GetSlashParams(slashFx.radMult);
-    const float range = sp.range;
+        float ax = slashFx.ax;
+        float ay = slashFx.ay;
 
-    float ax = slashFx.ax;
-    float ay = slashFx.ay;
+        float px = -ay;
+        float py = ax;
 
-    float px = -ay;
-    float py = ax;
+        float theta = std::acos(slashFx.cosHalfAngle);
+        float width = std::tan(theta);
 
-    // Convert cosHalfAngle into "width" so render matches gameplay cone
-    float theta = std::acos(slashFx.cosHalfAngle);
-    float width = std::tan(theta); // narrower cone => smaller width
+        float e1x = ax + px * width;
+        float e1y = ay + py * width;
+        float e2x = ax - px * width;
+        float e2y = ay - py * width;
 
-    float e1x = ax + px * width;
-    float e1y = ay + py * width;
-    float e2x = ax - px * width;
-    float e2y = ay - py * width;
-
-    auto Norm = [](float& x, float& y)
-        {
-            float l2 = x * x + y * y;
-            if (l2 > 0.0001f)
+        auto Norm = [](float& x, float& y)
             {
-                float inv = 1.0f / std::sqrt(l2);
-                x *= inv;
-                y *= inv;
-            }
-            else
-            {
-                x = 0.0f;
-                y = 0.0f;
-            }
-        };
+                float l2 = x * x + y * y;
+                if (l2 > 0.0001f)
+                {
+                    float inv = 1.0f / std::sqrt(l2);
+                    x *= inv; y *= inv;
+                }
+                else { x = 0.0f; y = 0.0f; }
+            };
 
-    Norm(e1x, e1y);
-    Norm(e2x, e2y);
+        Norm(e1x, e1y);
+        Norm(e2x, e2y);
 
-    float sx = slashFx.x - camOffX;
-    float sy = slashFx.y - camOffY;
+        float sx = slashFx.x - camOffX;
+        float sy = slashFx.y - camOffY;
 
-    float ex1 = sx + e1x * range;
-    float ey1 = sy + e1y * range;
-    float ex2 = sx + e2x * range;
-    float ey2 = sy + e2y * range;
+        float ex1 = sx + e1x * range;
+        float ey1 = sy + e1y * range;
+        float ex2 = sx + e2x * range;
+        float ey2 = sy + e2y * range;
 
-    float c = t;
-    App::DrawLine(sx, sy, ex1, ey1, c, c, c);
-    App::DrawLine(sx, sy, ex2, ey2, c, c, c);
-    App::DrawLine(ex1, ey1, ex2, ey2, c, c, c);
+        float r = 0.35f * t;
+        float g = 0.95f * t;
+        float b = 1.00f * t;
+
+        App::DrawLine(sx, sy, ex1, ey1, r, g, b);
+        App::DrawLine(sx, sy, ex2, ey2, r, g, b);
+        App::DrawLine(ex1, ey1, ex2, ey2, r, g, b);
+    }
+
+    // PULSE (electric blue ring)
+    if (pulseFx.active)
+    {
+        float t = 1.0f - (pulseFx.timeMs / pulseFx.durMs);
+        t = Clamp01(t);
+
+        float sx = pulseFx.x - camOffX;
+        float sy = pulseFx.y - camOffY;
+
+        float r = pulseFx.radius;
+
+        // electric blue that fades out
+        float cr = 0.20f * t;
+        float cg = 0.80f * t;
+        float cb = 1.00f * t;
+
+        DrawCircleLinesApprox(sx, sy, r, cr, cg, cb, 28);
+        DrawCircleLinesApprox(sx, sy, r * 0.65f, cr, cg, cb, 28);
+    }
+
+    // METEOR (fire rings)
+    if (meteorFx.active)
+    {
+        float t = 1.0f - (meteorFx.timeMs / meteorFx.durMs);
+        t = Clamp01(t);
+
+        float sx = meteorFx.x - camOffX;
+        float sy = meteorFx.y - camOffY;
+
+        float r = meteorFx.radius;
+
+        // fire palette (all fade with t)
+        // outer: orange
+        DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, 32);
+        // mid: yellow
+        DrawCircleLinesApprox(sx, sy, r * 0.7f, 1.00f * t, 0.85f * t, 0.10f * t, 32);
+        // inner: red
+        DrawCircleLinesApprox(sx, sy, r * 0.4f, 1.00f * t, 0.15f * t, 0.02f * t, 32);
+    }
 }

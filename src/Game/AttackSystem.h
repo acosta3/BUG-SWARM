@@ -25,9 +25,31 @@ struct SlashFX
     float ax = 0.0f, ay = 1.0f;
 
     float radMult = 1.0f;
+    float cosHalfAngle = 0.707f; // matches gameplay
+};
 
-    // NEW: store the same cone width as DoSlash uses
-    float cosHalfAngle = 0.707f;
+struct PulseFX
+{
+    bool  active = false;
+    float timeMs = 0.0f;
+    float durMs = 140.0f;
+
+    float x = 0.0f, y = 0.0f;
+    float radMult = 1.0f;
+
+    float radius = 80.0f; // matches gameplay (already scaled by radMult in cpp)
+};
+
+struct MeteorFX
+{
+    bool  active = false;
+    float timeMs = 0.0f;
+    float durMs = 220.0f;
+
+    float x = 0.0f, y = 0.0f;     // landing point
+    float radMult = 1.0f;
+
+    float radius = 120.0f;        // matches gameplay (already scaled by radMult in cpp)
 };
 
 class AttackSystem
@@ -51,7 +73,7 @@ public:
     int GetLastSlashKills()  const { return lastSlashKills; }
     int GetLastMeteorKills() const { return lastMeteorKills; }
 
-    // NEW: draw slash lines
+    // Draw all attack FX (slash wedge + pulse ring + meteor ring)
     void RenderFX(float camOffX, float camOffY) const;
 
 private:
@@ -71,4 +93,6 @@ private:
     int lastMeteorKills = 0;
 
     SlashFX slashFx;
+    PulseFX pulseFx;
+    MeteorFX meteorFx;
 };
