@@ -23,12 +23,24 @@ void WorldRenderer::RenderFrame(
     const ZombieSystem& zombies,
     const HiveSystem& hives,
     const AttackSystem& attacks,
+    float dtMs,
     bool densityView)
 {
     const float offX = camera.GetOffsetX();
     const float offY = camera.GetOffsetY();
 
-    RenderWorld(offX, offY, player, nav, zombies, hives, attacks, densityView);
+    RenderWorld(offX, offY, player, nav, zombies, hives, attacks, dtMs, densityView);
+}
+
+void WorldRenderer::NotifyKills(int kills)
+{
+    if (kills <= 0) return;
+
+    // If popup already active, stack kills into the same popup
+    if (killPopupTimeMs > 0.0f) killPopupCount += kills;
+    else killPopupCount = kills;
+
+    killPopupTimeMs = 900.0f; // show for ~0.9s
 }
 
 // --------------------------------------------
@@ -41,6 +53,7 @@ void WorldRenderer::RenderWorld(
     const ZombieSystem& zombies,
     const HiveSystem& hives,
     const AttackSystem& attacks,
+    float dtMs,
     bool densityView)
 {
     float px, py;
@@ -92,7 +105,8 @@ void WorldRenderer::RenderWorld(
         player.GetHealth(), player.GetMaxHealth(),
         attacks.GetPulseCooldownMs(),
         attacks.GetSlashCooldownMs(),
-        attacks.GetMeteorCooldownMs());
+        attacks.GetMeteorCooldownMs(),
+        dtMs);
 }
 
 // --------------------------------------------
@@ -196,7 +210,6 @@ void WorldRenderer::DrawBarLines(
 {
     t = Clamp01(t);
 
-    // Fill using stacked horizontal lines (works reliably in this API)
     const int lines = (int)std::lround(h);
     const float fillW = w * t;
 
@@ -204,15 +217,12 @@ void WorldRenderer::DrawBarLines(
     {
         const float yy = y + (float)i;
 
-        // background line
         App::DrawLine(x, yy, x + w, yy, bgR, bgG, bgB);
 
-        // fill line
         if (fillW > 0.5f)
             App::DrawLine(x, yy, x + fillW, yy, fillR, fillG, fillB);
     }
 
-    // outline
     DrawRectOutline(x, y, x + w, y + h, 0.95f, 0.95f, 0.95f);
 }
 
@@ -224,7 +234,8 @@ void WorldRenderer::RenderUI(
     int drawnCount, int step,
     bool densityView,
     int hp, int maxHp,
-    float pulseCdMs, float slashCdMs, float meteorCdMs)
+    float pulseCdMs, float slashCdMs, float meteorCdMs,
+    float dtMs)
 {
     // Bottom-left anchor (easy to read)
     const float x = 500.0f;
@@ -236,28 +247,24 @@ void WorldRenderer::RenderUI(
     std::snprintf(bufZ, sizeof(bufZ), "Zombies: %d/%d  Draw: %d  Step: %d", simCount, maxCount, drawnCount, step);
     App::Print((int)x, (int)(y - 18.0f), bufZ);
 
-    // HP label
     char bufHP[64];
     std::snprintf(bufHP, sizeof(bufHP), "HP %d/%d", hp, maxHp);
     App::Print((int)x, (int)(y - 36.0f), bufHP);
 
-    // HP bar (line fill like hive)
     const float hpT = (maxHp > 0) ? ((float)hp / (float)maxHp) : 0.0f;
     DrawBarLines(
         x + 120.0f, y - 34.0f,
         360.0f, 14.0f,
         hpT,
-        0.20f, 0.20f, 0.20f,     // bg
-        0.10f, 1.00f, 0.10f      // green fill
+        0.20f, 0.20f, 0.20f,
+        0.10f, 1.00f, 0.10f
     );
 
-    // Cooldown text
     char bufCD[160];
     std::snprintf(bufCD, sizeof(bufCD), "Cooldowns (ms)  Pulse: %.0f  Slash: %.0f  Meteor: %.0f",
         pulseCdMs, slashCdMs, meteorCdMs);
     App::Print((int)x, (int)(y - 54.0f), bufCD);
 
-    // Optional: cooldown bars (also line fill)
     const float pulseT = 1.0f - Clamp01(pulseCdMs / 200.0f);
     const float slashT = 1.0f - Clamp01(slashCdMs / 350.0f);
     const float meteorT = 1.0f - Clamp01(meteorCdMs / 900.0f);
@@ -265,10 +272,30 @@ void WorldRenderer::RenderUI(
     DrawBarLines(x + 120.0f, y - 70.0f, 110.0f, 10.0f, pulseT, 0.15f, 0.15f, 0.15f, 0.95f, 0.95f, 0.20f);
     DrawBarLines(x + 240.0f, y - 70.0f, 110.0f, 10.0f, slashT, 0.15f, 0.15f, 0.15f, 0.95f, 0.50f, 0.20f);
     DrawBarLines(x + 360.0f, y - 70.0f, 110.0f, 10.0f, meteorT, 0.15f, 0.15f, 0.15f, 0.95f, 0.20f, 0.20f);
+
+    // --- Kill popup (top-ish) ---
+    if (killPopupTimeMs > 0.0f)
+    {
+        killPopupTimeMs -= dtMs;
+        if (killPopupTimeMs < 0.0f) killPopupTimeMs = 0.0f;
+
+        char kb[64];
+        std::snprintf(kb, sizeof(kb), "+%d KILLS", killPopupCount);
+        App::Print(440, 720, kb);
+
+        const float t = Clamp01(killPopupTimeMs / 900.0f);
+        DrawBarLines(430.0f, 708.0f, 200.0f, 6.0f, t,
+            0.10f, 0.10f, 0.10f,
+            1.00f, 0.90f, 0.20f);
+    }
+    else
+    {
+        killPopupCount = 0;
+    }
 }
 
 // --------------------------------------------
-// Tri helper (NO face culling, no IsBackFace2D)
+// Tri helper
 // --------------------------------------------
 void WorldRenderer::DrawZombieTri(float x, float y, float size, float r, float g, float b)
 {

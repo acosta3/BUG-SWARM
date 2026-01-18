@@ -1,3 +1,4 @@
+// ZombieSystem.h
 #pragma once
 #include <vector>
 #include <cstdint>
@@ -64,7 +65,12 @@ public:
     void Clear();
 
     void Spawn(int count, float playerX, float playerY);
-    void Kill(int index);
+
+    // IMPORTANT:
+    // - Despawn is used for non-player removals (fear ran far, cleanup, etc.)
+    // - KillByPlayer is what AttackSystem should call when an attack kills a zombie.
+    void Despawn(int index);
+    void KillByPlayer(int index);
 
     // Returns damage dealt to player this frame
     int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
@@ -72,8 +78,16 @@ public:
     void TriggerFear(float sourceX, float sourceY, float radius, float durationMs);
 
 public:
+    // Per-frame kill counter for UI popups
+    void BeginFrame();
+    int  ConsumeKillsThisFrame();   // returns kills since last consume (and clears)
+    int  LastMoveKills() const { return lastMoveKills; }
+
+public:
     // Accessors
     int AliveCount() const { return aliveCount; }
+    int MaxCount() const { return maxCount; }
+    bool CanSpawnMore(int n = 1) const { return (aliveCount + n) <= maxCount; }
 
     float   GetX(int i) const { return posX[i]; }
     float   GetY(int i) const { return posY[i]; }
@@ -97,13 +111,7 @@ public:
     ZombieTuning& GetTuning() { return tuning; }
     const ZombieTuning& GetTuning() const { return tuning; }
 
-
-    int  MaxCount() const { return maxCount; }
-    bool CanSpawnMore(int n = 1) const { return (aliveCount + n) <= maxCount; }
-
-
     bool SpawnAtWorld(float x, float y, uint8_t forcedType = 255);
-
 
 private:
     // ---- Init helpers ----
@@ -132,6 +140,9 @@ private:
     // Utility
     static void NormalizeSafe(float& x, float& y);
     static float Clamp01(float v);
+
+    // Swap-remove core (used by Despawn and KillByPlayer)
+    void KillSwapRemove(int index);
 
 private:
     ZombieTuning tuning;
@@ -170,4 +181,8 @@ private:
     std::vector<int> cellCount;   // size = gridW*gridH
     std::vector<int> cellList;    // size = maxCount
     std::vector<int> writeCursor; // size = gridW*gridH + 1
+
+private:
+    int killsThisFrame = 0; // only player kills
+    int lastMoveKills = 0;  // last consumed batch
 };

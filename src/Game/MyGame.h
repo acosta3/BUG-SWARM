@@ -1,3 +1,4 @@
+// MyGame.h
 #pragma once
 
 #include "Player.h"
@@ -7,17 +8,11 @@
 #include "AttackSystem.h"
 #include "NavGrid.h"
 #include "HiveSystem.h"
-
-// New
 #include "WorldRenderer.h"
-
-
-
 
 class MyGame
 {
 public:
-
     static constexpr int kMaxZombies = 20'000;
 
     void Init();
@@ -48,10 +43,8 @@ private:
     ZombieSystem zombies;
     AttackSystem attacks;
     NavGrid nav;
-
     HiveSystem hives;
 
-    // New: all drawing lives here now
     WorldRenderer renderer;
 
     bool densityView = false;
@@ -59,4 +52,7 @@ private:
     float lastAimX = 0.0f;
     float lastAimY = 1.0f;
     int lastTargetCell = -1;
+
+    // NEW: store dt so RenderFrame can animate popups
+    float lastDtMs = 16.0f;
 };

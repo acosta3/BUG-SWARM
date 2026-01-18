@@ -1,12 +1,10 @@
-﻿#include "ZombieSystem.h"
+﻿// ZombieSystem.cpp
+#include "ZombieSystem.h"
 #include "NavGrid.h"
 
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
-
-
-
 
 // -------------------- small utilities --------------------
 static float Rand01()
@@ -80,6 +78,21 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
     return false;
 }
 
+// -------------------- kill counter --------------------
+// NOTE: BeginFrame() is called by MyGame at the start of the frame (before attacks).
+void ZombieSystem::BeginFrame()
+{
+    killsThisFrame = 0;
+}
+
+int ZombieSystem::ConsumeKillsThisFrame()
+{
+    const int k = killsThisFrame;
+    killsThisFrame = 0;
+    lastMoveKills = k;
+    return k;
+}
+
 // -------------------- init --------------------
 void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
 {
@@ -116,6 +129,9 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     cellCount.resize(gridW * gridH);
     writeCursor.resize(gridW * gridH + 1);
     cellList.resize(maxCount);
+
+    killsThisFrame = 0;
+    lastMoveKills = 0;
 }
 
 bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
@@ -140,7 +156,6 @@ bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
     flowAssistMs[i] = 0.0f;
     return true;
 }
-
 
 void ZombieSystem::InitTypeStats()
 {
@@ -202,6 +217,8 @@ void ZombieSystem::BuildGrid()
 void ZombieSystem::Clear()
 {
     aliveCount = 0;
+    killsThisFrame = 0;
+    lastMoveKills = 0;
 }
 
 void ZombieSystem::Spawn(int count, float playerX, float playerY)
@@ -234,7 +251,7 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
     }
 }
 
-void ZombieSystem::Kill(int index)
+void ZombieSystem::KillSwapRemove(int index)
 {
     const int last = aliveCount - 1;
     if (index != last)
@@ -254,6 +271,17 @@ void ZombieSystem::Kill(int index)
         flowAssistMs[index] = flowAssistMs[last];
     }
     aliveCount--;
+}
+
+void ZombieSystem::Despawn(int index)
+{
+    KillSwapRemove(index);
+}
+
+void ZombieSystem::KillByPlayer(int index)
+{
+    killsThisFrame++;
+    KillSwapRemove(index);
 }
 
 // -------------------- per-frame helpers --------------------
@@ -373,6 +401,9 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
 // -------------------- update --------------------
 int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
+    // IMPORTANT: Do NOT reset killsThisFrame here.
+    // It is reset once per frame in MyGame::Update() via zombies.BeginFrame().
+
     const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return 0;
 
@@ -401,9 +432,10 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
 
         ApplyTouchDamage(i, s, distSqToPlayer, hitDistSq, damageThisFrame);
 
+        // Feared: despawn when far enough away (NOT a player kill)
         if (feared && distSqToPlayer > fleeDespawnRadiusSq)
         {
-            Kill(i);
+            Despawn(i);
             continue;
         }
 

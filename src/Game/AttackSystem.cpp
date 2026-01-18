@@ -1,3 +1,4 @@
+// AttackSystem.cpp
 #include "AttackSystem.h"
 #include "ZombieSystem.h"
 #include "HiveSystem.h"
@@ -17,9 +18,9 @@ static float Lerp(float a, float b, float t)
     return a + (b - a) * t;
 }
 
-// Small (<=0.7): dmg 0.85x, radius 0.90x
+// Small (<=0.7): dmg 0.70x, radius 0.60x
 // Normal (~1.0):  dmg 1.00x, radius 1.00x
-// Big (>=1.3):    dmg 1.20x, radius 1.25x
+// Big (>=1.3):    dmg 1.45x, radius 1.80x
 static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMult)
 {
     const float smallS = 0.7f;
@@ -69,6 +70,10 @@ void AttackSystem::Init()
     pulseCooldownMs = 0.0f;
     slashCooldownMs = 0.0f;
     meteorCooldownMs = 0.0f;
+
+    lastPulseKills = 0;
+    lastSlashKills = 0;
+    lastMeteorKills = 0;
 }
 
 void AttackSystem::TickCooldown(float& cd, float dtMs)
@@ -92,6 +97,11 @@ void AttackSystem::Process(const AttackInput& in,
     HiveSystem& hives,
     CameraSystem& camera)
 {
+    // Reset "last kills" each frame (only set when that move is used)
+    lastPulseKills = 0;
+    lastSlashKills = 0;
+    lastMeteorKills = 0;
+
     if (in.pulsePressed && pulseCooldownMs <= 0.0f)
     {
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
@@ -135,23 +145,24 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
-        float dx = zombies.GetX(i) - px;
-        float dy = zombies.GetY(i) - py;
-        float d2 = dx * dx + dy * dy;
+        const float dx = zombies.GetX(i) - px;
+        const float dy = zombies.GetY(i) - py;
+        const float d2 = dx * dx + dy * dy;
 
         if (d2 <= r2)
         {
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
                 eliteKilled = true;
 
-            zombies.Kill(i);
+            zombies.KillByPlayer(i); // IMPORTANT: no i++ (swap remove)
             killed++;
+            continue;
         }
-        else
-        {
-            i++;
-        }
+
+        i++;
     }
+
+    lastPulseKills = killed;
 
     const float hiveDamage = 20.0f * dmgMult;
     const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage);
@@ -176,7 +187,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
     {
-        float inv = 1.0f / std::sqrt(len2);
+        const float inv = 1.0f / std::sqrt(len2);
         aimX *= inv;
         aimY *= inv;
     }
@@ -191,44 +202,45 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
-        float zx = zombies.GetX(i) - px;
-        float zy = zombies.GetY(i) - py;
+        const float zx = zombies.GetX(i) - px;
+        const float zy = zombies.GetY(i) - py;
 
-        float d2 = zx * zx + zy * zy;
+        const float d2 = zx * zx + zy * zy;
         if (d2 > range2)
         {
             i++;
             continue;
         }
 
-        float d = std::sqrt(d2);
+        const float d = std::sqrt(d2);
         if (d < 0.0001f)
         {
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
                 eliteKilled = true;
 
-            zombies.Kill(i);
+            zombies.KillByPlayer(i);
             killed++;
             continue;
         }
 
-        float nx = zx / d;
-        float ny = zy / d;
+        const float nx = zx / d;
+        const float ny = zy / d;
 
-        float dot = nx * aimX + ny * aimY;
+        const float dot = nx * aimX + ny * aimY;
         if (dot >= cosHalfAngle)
         {
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
                 eliteKilled = true;
 
-            zombies.Kill(i);
+            zombies.KillByPlayer(i);
             killed++;
+            continue;
         }
-        else
-        {
-            i++;
-        }
+
+        i++;
     }
+
+    lastSlashKills = killed;
 
     const float slashCenterDist = 90.0f * radMult;
     const float hx = px + aimX * slashCenterDist;
@@ -254,7 +266,7 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     float len2 = aimX * aimX + aimY * aimY;
     if (len2 > 0.0001f)
     {
-        float inv = 1.0f / std::sqrt(len2);
+        const float inv = 1.0f / std::sqrt(len2);
         aimX *= inv;
         aimY *= inv;
     }
@@ -276,23 +288,24 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
     for (int i = 0; i < zombies.AliveCount(); )
     {
-        float dx = zombies.GetX(i) - tx;
-        float dy = zombies.GetY(i) - ty;
-        float d2 = dx * dx + dy * dy;
+        const float dx = zombies.GetX(i) - tx;
+        const float dy = zombies.GetY(i) - ty;
+        const float d2 = dx * dx + dy * dy;
 
         if (d2 <= r2)
         {
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE)
                 eliteKilled = true;
 
-            zombies.Kill(i);
+            zombies.KillByPlayer(i);
             killed++;
+            continue;
         }
-        else
-        {
-            i++;
-        }
+
+        i++;
     }
+
+    lastMeteorKills = killed;
 
     const float hiveDamage = 50.0f * dmgMult;
     const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage);

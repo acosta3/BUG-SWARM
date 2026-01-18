@@ -1,3 +1,4 @@
+// MyGame.cpp
 #include "MyGame.h"
 #include "../ContestAPI/app.h"
 #include <cstdio>
@@ -15,6 +16,8 @@ void MyGame::Init()
 
 void MyGame::Update(float deltaTimeMs)
 {
+    lastDtMs = deltaTimeMs;
+
     UpdateInput(deltaTimeMs);
 
     // If dead, keep camera stable (optional) and stop gameplay
@@ -26,39 +29,29 @@ void MyGame::Update(float deltaTimeMs)
         return;
     }
 
-
-
     UpdatePlayer(deltaTimeMs);
     hives.Update(deltaTimeMs, zombies, nav);
 
-
-
-
     float px, py;
     player.GetWorldPosition(px, py);
-
 
     UpdateAttacks(deltaTimeMs);
     UpdateNavFlowField(px, py);
     UpdateCamera(deltaTimeMs, px, py);
     UpdateZombies(deltaTimeMs, px, py);
+
+    // NEW: send kill count to renderer popup
+    renderer.NotifyKills(zombies.ConsumeKillsThisFrame());
 }
 
 void MyGame::Render()
 {
-   
-    renderer.RenderFrame(camera, player, nav, zombies, hives, attacks, densityView);
-
-
-    
+    renderer.RenderFrame(camera, player, nav, zombies, hives, attacks, lastDtMs, densityView);
 }
 
 void MyGame::Shutdown()
 {
-    // Nothing required right now:
-    // - Player owns sprite via unique_ptr
-    // - ZombieSystem uses vectors managed by RAII
-    // - InputSystem has no heap allocations
+    // Nothing required right now
 }
 
 // ------------------------------------------------------------
@@ -115,7 +108,8 @@ void MyGame::InitObstacles()
     // Bar
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
 
-	nav.ClearObstacles(); // issue is how my rectangle are colliding 
+    // NOTE: you currently clear everything here, so obstacles won't exist.
+     nav.ClearObstacles();
 }
 
 void MyGame::InitSystems()
@@ -123,24 +117,19 @@ void MyGame::InitSystems()
     float px, py;
     player.GetWorldPosition(px, py);
 
-    // Zombies AFTER nav (so zombies can copy world bounds from nav)
-
-
-    hives.Init(); // add this
+    hives.Init();
 
     zombies.Init(kMaxZombies, nav);
-    zombies.Spawn(kMaxZombies/2, px, py); // or spawn less if you want a ramp
+    zombies.Spawn(kMaxZombies / 2, px, py);
 
-
-    // Attacks last (depends on zombies + camera)
     attacks.Init();
-
-    
 
     // Persistent state
     lastAimX = 0.0f;
     lastAimY = 1.0f;
     lastTargetCell = -1;
+
+    lastDtMs = 16.0f;
 }
 
 // ------------------------------------------------------------
@@ -163,7 +152,6 @@ void MyGame::UpdatePlayer(float deltaTimeMs)
     player.SetMoveInput(in.moveX, in.moveY);
     player.Update(deltaTimeMs);
     player.ApplyScaleInput(input.GetState().scaleUpHeld, input.GetState().scaleDownHeld, deltaTimeMs);
-
 
     // Update last aim when moving
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
@@ -208,7 +196,6 @@ void MyGame::UpdateAttacks(float deltaTimeMs)
     const AttackInput a = BuildAttackInput(in);
 
     attacks.Process(a, px, py, player.GetScale(), zombies, hives, camera);
-
 }
 
 void MyGame::UpdateNavFlowField(float playerX, float playerY)
@@ -233,11 +220,3 @@ void MyGame::UpdateZombies(float deltaTimeMs, float playerX, float playerY)
     if (dmg > 0)
         player.TakeDamage(dmg);
 }
-
-
-
-
-
-
-
-

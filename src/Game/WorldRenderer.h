@@ -1,10 +1,10 @@
 // WorldRenderer.h
 #pragma once
 
+class CameraSystem;
 class Player;
 class NavGrid;
 class ZombieSystem;
-class CameraSystem;
 class HiveSystem;
 class AttackSystem;
 
@@ -18,7 +18,10 @@ public:
         const ZombieSystem& zombies,
         const HiveSystem& hives,
         const AttackSystem& attacks,
+        float dtMs,
         bool densityView);
+
+    void NotifyKills(int kills);
 
 private:
     void RenderWorld(
@@ -28,6 +31,7 @@ private:
         const ZombieSystem& zombies,
         const HiveSystem& hives,
         const AttackSystem& attacks,
+        float dtMs,
         bool densityView);
 
     void RenderZombies2D(float offX, float offY, const ZombieSystem& zombies, bool densityView);
@@ -37,18 +41,20 @@ private:
         int drawnCount, int step,
         bool densityView,
         int hp, int maxHp,
-        float pulseCdMs, float slashCdMs, float meteorCdMs);
-
-private:
-    // UI helpers (line-based, like HiveSystem::Render)
-    void DrawBarLines(float x, float y, float w, float h, float t,
-        float bgR, float bgG, float bgB,
-        float fillR, float fillG, float fillB) const;
+        float pulseCdMs, float slashCdMs, float meteorCdMs,
+        float dtMs);
 
     void DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const;
 
-private:
-    void DrawZombieTri(float x, float y, float size, float r, float g, float b);
+    void DrawBarLines(
+        float x, float y, float w, float h, float t,
+        float bgR, float bgG, float bgB,
+        float fillR, float fillG, float fillB) const;
 
+    static void DrawZombieTri(float x, float y, float size, float r, float g, float b);
     static float Clamp01(float v);
+
+private:
+    int   killPopupCount = 0;
+    float killPopupTimeMs = 0.0f;
 };
