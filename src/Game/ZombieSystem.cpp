@@ -1,10 +1,16 @@
-﻿// ZombieSystem.cpp
+﻿// ZombieSystem.cpp (FULL + ULTRA SCALE + STAGGERED SEEK)
+// - Includes ALL definitions declared in ZombieSystem.h
+// - Near-only separation grid + capped separation
+// - Far LOD stagger (1/2, 1/4, 1/8) + optional skip NavGrid collision
+// - Near LOD stagger: flow assist + separation to reduce SEEK cost
+
 #include "ZombieSystem.h"
 #include "NavGrid.h"
 
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
 
 // -------------------- small utilities --------------------
 static float Rand01()
@@ -79,7 +85,6 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
 }
 
 // -------------------- kill counter --------------------
-// NOTE: BeginFrame() is called by MyGame at the start of the frame (before attacks).
 void ZombieSystem::BeginFrame()
 {
     killsThisFrame = 0;
@@ -134,6 +139,13 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     lastMoveKills = 0;
 }
 
+void ZombieSystem::Clear()
+{
+    aliveCount = 0;
+    killsThisFrame = 0;
+    lastMoveKills = 0;
+}
+
 bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
 {
     if (aliveCount >= maxCount) return false;
@@ -155,70 +167,6 @@ bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
 
     flowAssistMs[i] = 0.0f;
     return true;
-}
-
-void ZombieSystem::InitTypeStats()
-{
-    typeStats[GREEN] = { 60.f, 1.f, 1.f,  1, 1, 750.f,   0.f };
-    typeStats[RED] = { 90.f, 1.f, 1.f,  1, 1, 650.f,   0.f };
-    typeStats[BLUE] = { 45.f, 1.f, 1.f,  4, 2, 900.f,   0.f };
-    typeStats[PURPLE_ELITE] = { 65.f, 1.f, 1.f, 12, 3, 850.f, 220.f };
-}
-
-uint8_t ZombieSystem::RollTypeWeighted() const
-{
-    const float r = Rand01();
-    if (r < 0.70f) return GREEN;
-    if (r < 0.90f) return RED;
-    if (r < 0.99f) return BLUE;
-    return PURPLE_ELITE;
-}
-
-// -------------------- grid --------------------
-int ZombieSystem::CellIndex(float x, float y) const
-{
-    int cx = (int)((x - worldMinX) / cellSize);
-    int cy = (int)((y - worldMinY) / cellSize);
-
-    cx = std::clamp(cx, 0, gridW - 1);
-    cy = std::clamp(cy, 0, gridH - 1);
-
-    return cy * gridW + cx;
-}
-
-void ZombieSystem::BuildGrid()
-{
-    const int cellN = gridW * gridH;
-
-    std::fill(cellCount.begin(), cellCount.end(), 0);
-
-    for (int i = 0; i < aliveCount; i++)
-    {
-        const int c = CellIndex(posX[i], posY[i]);
-        cellCount[c]++;
-    }
-
-    cellStart[0] = 0;
-    for (int c = 0; c < cellN; c++)
-        cellStart[c + 1] = cellStart[c] + cellCount[c];
-
-    // No allocation after Init()
-    writeCursor = cellStart;
-
-    for (int i = 0; i < aliveCount; i++)
-    {
-        const int c = CellIndex(posX[i], posY[i]);
-        const int dst = writeCursor[c]++;
-        cellList[dst] = i;
-    }
-}
-
-// -------------------- lifecycle --------------------
-void ZombieSystem::Clear()
-{
-    aliveCount = 0;
-    killsThisFrame = 0;
-    lastMoveKills = 0;
 }
 
 void ZombieSystem::Spawn(int count, float playerX, float playerY)
@@ -251,6 +199,25 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
     }
 }
 
+// -------------------- types --------------------
+void ZombieSystem::InitTypeStats()
+{
+    typeStats[GREEN] = { 60.f, 1.f, 1.f,  1, 1, 750.f,   0.f };
+    typeStats[RED] = { 90.f, 1.f, 1.f,  1, 1, 650.f,   0.f };
+    typeStats[BLUE] = { 45.f, 1.f, 1.f,  4, 2, 900.f,   0.f };
+    typeStats[PURPLE_ELITE] = { 65.f, 1.f, 1.f, 12, 3, 850.f, 220.f };
+}
+
+uint8_t ZombieSystem::RollTypeWeighted() const
+{
+    const float r = Rand01();
+    if (r < 0.70f) return GREEN;
+    if (r < 0.90f) return RED;
+    if (r < 0.99f) return BLUE;
+    return PURPLE_ELITE;
+}
+
+// -------------------- swap remove --------------------
 void ZombieSystem::KillSwapRemove(int index)
 {
     const int last = aliveCount - 1;
@@ -282,6 +249,68 @@ void ZombieSystem::KillByPlayer(int index)
 {
     killsThisFrame++;
     KillSwapRemove(index);
+}
+
+// -------------------- grid --------------------
+int ZombieSystem::CellIndex(float x, float y) const
+{
+    int cx = (int)((x - worldMinX) / cellSize);
+    int cy = (int)((y - worldMinY) / cellSize);
+
+    cx = std::clamp(cx, 0, gridW - 1);
+    cy = std::clamp(cy, 0, gridH - 1);
+
+    return cy * gridW + cx;
+}
+
+// Build separation grid using ONLY indices in 'indices'
+static void BuildGridNear_Internal(
+    int gridW, int gridH,
+    float worldMinX, float worldMinY,
+    float cellSize,
+    const std::vector<float>& posX,
+    const std::vector<float>& posY,
+    const std::vector<int>& indices,
+    std::vector<int>& cellCount,
+    std::vector<int>& cellStart,
+    std::vector<int>& writeCursor,
+    std::vector<int>& cellList)
+{
+    const int cellN = gridW * gridH;
+
+    std::fill(cellCount.begin(), cellCount.end(), 0);
+
+    auto CellIndexLocal = [&](float x, float y) -> int
+        {
+            int cx = (int)((x - worldMinX) / cellSize);
+            int cy = (int)((y - worldMinY) / cellSize);
+
+            cx = std::clamp(cx, 0, gridW - 1);
+            cy = std::clamp(cy, 0, gridH - 1);
+
+            return cy * gridW + cx;
+        };
+
+    for (int idx = 0; idx < (int)indices.size(); idx++)
+    {
+        const int i = indices[idx];
+        const int c = CellIndexLocal(posX[i], posY[i]);
+        cellCount[c]++;
+    }
+
+    cellStart[0] = 0;
+    for (int c = 0; c < cellN; c++)
+        cellStart[c + 1] = cellStart[c] + cellCount[c];
+
+    writeCursor = cellStart;
+
+    for (int idx = 0; idx < (int)indices.size(); idx++)
+    {
+        const int i = indices[idx];
+        const int c = CellIndexLocal(posX[i], posY[i]);
+        const int dst = writeCursor[c]++;
+        cellList[dst] = i;
+    }
 }
 
 // -------------------- per-frame helpers --------------------
@@ -341,14 +370,14 @@ void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioD
     const float fy = nav.FlowYAtCell(navCell);
 
     const float f2 = fx * fx + fy * fy;
-    if (f2 <= 0.0001f)
-        return;
+    if (f2 <= 0.0001f) return;
 
     ioDX = ioDX * (1.0f - flowWeight) + fx * flowWeight;
     ioDY = ioDY * (1.0f - flowWeight) + fy * flowWeight;
     NormalizeSafe(ioDX, ioDY);
 }
 
+// capped separation
 void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) const
 {
     outSepX = 0.0f;
@@ -360,6 +389,9 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
     const int c = CellIndex(posX[i], posY[i]);
     const int cx = c % gridW;
     const int cy = c / gridW;
+
+    int checked = 0;
+    const int maxChecks = 32;
 
     for (int oy = -1; oy <= 1; oy++)
     {
@@ -392,6 +424,10 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
                     const float push = (sepRadius - d) / sepRadius;
                     outSepX += ax * invD * push;
                     outSepY += ay * invD * push;
+
+                    checked++;
+                    if (checked >= maxChecks)
+                        return;
                 }
             }
         }
@@ -401,9 +437,6 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
 // -------------------- update --------------------
 int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
-    // IMPORTANT: Do NOT reset killsThisFrame here.
-    // It is reset once per frame in MyGame::Update() via zombies.BeginFrame().
-
     const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return 0;
 
@@ -415,7 +448,44 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     const float sepActiveRadiusSq = tuning.sepActiveRadius * tuning.sepActiveRadius;
     const float fleeDespawnRadiusSq = tuning.fleeDespawnRadius * tuning.fleeDespawnRadius;
 
-    BuildGrid();
+    // Far LOD radii (tune)
+    const float noCollisionR = tuning.sepActiveRadius * 1.25f;
+    const float noCollisionRSq = noCollisionR * noCollisionR;
+
+    const float farCheapR = tuning.sepActiveRadius * 2.5f;
+    const float farCheapRSq = farCheapR * farCheapR;
+
+    const float veryFarCheapRSq = farCheapRSq * 2.25f;
+
+    // frame counter (stagger)
+    static uint32_t frameCounter = 0;
+    frameCounter++;
+
+    // Build near list once
+    static std::vector<int> nearList;
+    nearList.clear();
+    nearList.reserve(aliveCount);
+
+    for (int i = 0; i < aliveCount; i++)
+    {
+        const float dx = playerX - posX[i];
+        const float dy = playerY - posY[i];
+        const float d2 = dx * dx + dy * dy;
+        if (d2 <= sepActiveRadiusSq)
+            nearList.push_back(i);
+    }
+
+    // Build separation grid using nearList only
+    BuildGridNear_Internal(
+        gridW, gridH,
+        worldMinX, worldMinY,
+        cellSize,
+        posX, posY,
+        nearList,
+        cellCount,
+        cellStart,
+        writeCursor,
+        cellList);
 
     for (int i = 0; i < aliveCount; )
     {
@@ -432,14 +502,14 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
 
         ApplyTouchDamage(i, s, distSqToPlayer, hitDistSq, damageThisFrame);
 
-        // Feared: despawn when far enough away (NOT a player kill)
+        // Feared despawn far away
         if (feared && distSqToPlayer > fleeDespawnRadiusSq)
         {
             Despawn(i);
             continue;
         }
 
-        // ---- feared: flee (no separation) ----
+        // ---- feared: flee ----
         if (feared)
         {
             float dx, dy;
@@ -455,30 +525,61 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
             continue;
         }
 
-        // ---- seek + optional flow assist ----
+        // ---- seek base dir ----
         float dx, dy;
         ComputeSeekDir(i, playerX, playerY, dx, dy);
-        ApplyFlowAssistIfActive(i, nav, dx, dy);
 
-        // ---- LOD: far away = no separation ----
+        // -------------------- FAR LOD --------------------
         if (distSqToPlayer > sepActiveRadiusSq)
         {
+            uint32_t rateMask = 1u;
+            if (distSqToPlayer > farCheapRSq)      rateMask = 3u;
+            if (distSqToPlayer > veryFarCheapRSq)  rateMask = 7u;
+
+            if (((frameCounter + (uint32_t)i) & rateMask) != 0u)
+            {
+                // cheap drift
+                posX[i] += velX[i] * dt;
+                posY[i] += velY[i] * dt;
+                i++;
+                continue;
+            }
+
+            // recompute velocity this tick
             velX[i] = dx * s.maxSpeed;
             velY[i] = dy * s.maxSpeed;
 
-            bool fullBlocked = false;
-            const bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
-
-            if (fullBlocked || !moved)
-                flowAssistMs[i] = tuning.flowAssistBurstMs;
+            const bool skipCollision = (distSqToPlayer > noCollisionRSq);
+            if (skipCollision)
+            {
+                posX[i] += velX[i] * dt;
+                posY[i] += velY[i] * dt;
+            }
+            else
+            {
+                bool fullBlocked = false;
+                const bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
+                if (fullBlocked || !moved)
+                    flowAssistMs[i] = tuning.flowAssistBurstMs;
+            }
 
             i++;
             continue;
         }
 
-        // ---- separation ----
-        float sepX, sepY;
-        ComputeSeparation(i, sepX, sepY);
+        // -------------------- NEAR (staggered flow + staggered separation) --------------------
+        const bool doFlow = (((frameCounter + (uint32_t)i) & 1u) == 0u);
+        if (doFlow)
+            ApplyFlowAssistIfActive(i, nav, dx, dy);
+
+        float sepX = 0.0f;
+        float sepY = 0.0f;
+
+        // 1u => every 2 frames; change to 3u for every 4 frames
+        const uint32_t sepMask = 1u;
+        const bool doSep = (((frameCounter + (uint32_t)i) & sepMask) == 0u);
+        if (doSep)
+            ComputeSeparation(i, sepX, sepY);
 
         float vx = dx * s.seekWeight + sepX * s.sepWeight;
         float vy = dy * s.seekWeight + sepY * s.sepWeight;

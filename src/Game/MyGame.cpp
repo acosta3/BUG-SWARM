@@ -109,7 +109,7 @@ void MyGame::InitObstacles()
     nav.AddObstacleRect(-300.0f, -200.0f, 100.0f, -175.0f);
 
     // NOTE: you currently clear everything here, so obstacles won't exist.
-     nav.ClearObstacles();
+     //nav.ClearObstacles();
 }
 
 void MyGame::InitSystems()

@@ -122,6 +122,8 @@ private:
     int  CellIndex(float x, float y) const;
     void BuildGrid();
 
+    void BuildGridNear(const std::vector<int>& indices);
+
     // ---- Per-frame helpers ----
     void TickTimers(int i, float deltaTimeMs);
     void ApplyTouchDamage(int i, const ZombieTypeStats& s, float distSqToPlayer, float hitDistSq, int& outDamage);

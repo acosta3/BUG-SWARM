@@ -15,7 +15,7 @@ struct Hive
 
     bool alive = true;
 
-    float spawnPerMin = 100.0f;
+    float spawnPerMin = 1000.0f;
     float spawnAccum = 0.0f;
 };
 
