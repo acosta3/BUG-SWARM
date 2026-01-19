@@ -3,6 +3,15 @@
 
 namespace GameConfig
 {
+
+    // Object Pool Configuration
+    struct PoolConfig
+    {
+        static constexpr int VFX_POOL_SIZE = 32;
+        static constexpr int POPUP_POOL_SIZE = 64;
+        static constexpr int PROJECTILE_POOL_SIZE = 128;
+    };
+
     // Mathematical Constants - Shared across all systems
     // Note: PI is already defined in AppSettings.h as a macro
     struct MathConstants

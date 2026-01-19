@@ -110,9 +110,8 @@ void AttackSystem::Init()
     lastSlashKills = 0;
     lastMeteorKills = 0;
 
-    slashFx = SlashFX{};
-    pulseFx = PulseFX{};
-    meteorFx = MeteorFX{};
+    // Object pools are auto-initialized in constructor
+    // No need to manually clear - they pre-allocate on construction
 }
 
 void AttackSystem::TickCooldown(float& cd, float dtMs)
@@ -128,22 +127,49 @@ void AttackSystem::Update(float deltaTimeMs)
     TickCooldown(slashCooldownMs, deltaTimeMs);
     TickCooldown(meteorCooldownMs, deltaTimeMs);
 
-    if (slashFx.active)
+    // Update all active slash FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        slashFx.timeMs += deltaTimeMs;
-        if (slashFx.timeMs >= slashFx.durMs) slashFx.active = false;
+        SlashFX* fx = slashFxPool.GetActive(i);
+        if (fx && fx->active)
+        {
+            fx->timeMs += deltaTimeMs;
+            if (fx->timeMs >= fx->durMs)
+            {
+                fx->active = false;
+                slashFxPool.Release(fx);
+            }
+        }
     }
 
-    if (pulseFx.active)
+    // Update all active pulse FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        pulseFx.timeMs += deltaTimeMs;
-        if (pulseFx.timeMs >= pulseFx.durMs) pulseFx.active = false;
+        PulseFX* fx = pulseFxPool.GetActive(i);
+        if (fx && fx->active)
+        {
+            fx->timeMs += deltaTimeMs;
+            if (fx->timeMs >= fx->durMs)
+            {
+                fx->active = false;
+                pulseFxPool.Release(fx);
+            }
+        }
     }
 
-    if (meteorFx.active)
+    // Update all active meteor FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        meteorFx.timeMs += deltaTimeMs;
-        if (meteorFx.timeMs >= meteorFx.durMs) meteorFx.active = false;
+        MeteorFX* fx = meteorFxPool.GetActive(i);
+        if (fx && fx->active)
+        {
+            fx->timeMs += deltaTimeMs;
+            if (fx->timeMs >= fx->durMs)
+            {
+                fx->active = false;
+                meteorFxPool.Release(fx);
+            }
+        }
     }
 }
 
@@ -178,18 +204,22 @@ void AttackSystem::Process(const AttackInput& in,
         pulseCooldownMs = GameConfig::AttackConfig::PULSE_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::PULSE_SOUND, false);
 
-        // start pulse FX (centered on player)
-        float dmgDummy = 1.0f, radMult = 1.0f;
-        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
-        const PulseParams pp = GetPulseParams(radMult);
+        // Acquire pulse FX from pool (AAA style - zero allocations!)
+        PulseFX* fx = pulseFxPool.Acquire();
+        if (fx)
+        {
+            float dmgDummy = 1.0f, radMult = 1.0f;
+            GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+            const PulseParams pp = GetPulseParams(radMult);
 
-        pulseFx.active = true;
-        pulseFx.timeMs = 0.0f;
-        pulseFx.durMs = GameConfig::AttackConfig::PULSE_FX_DURATION_MS;
-        pulseFx.x = playerX;
-        pulseFx.y = playerY;
-        pulseFx.radMult = radMult;
-        pulseFx.radius = pp.radius;
+            fx->active = true;
+            fx->timeMs = 0.0f;
+            fx->durMs = GameConfig::AttackConfig::PULSE_FX_DURATION_MS;
+            fx->x = playerX;
+            fx->y = playerY;
+            fx->radMult = radMult;
+            fx->radius = pp.radius;
+        }
     }
 
     if (in.slashPressed && slashCooldownMs <= 0.0f)
@@ -198,30 +228,34 @@ void AttackSystem::Process(const AttackInput& in,
         slashCooldownMs = GameConfig::AttackConfig::SLASH_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::SLASH_SOUND, false);
 
-        // start slash FX
-        slashFx.active = true;
-        slashFx.timeMs = 0.0f;
-        slashFx.durMs = GameConfig::AttackConfig::SLASH_FX_DURATION_MS;
-        slashFx.x = playerX;
-        slashFx.y = playerY;
-
-        float ax = in.aimX, ay = in.aimY;
-        float len2 = ax * ax + ay * ay;
-        if (len2 > GameConfig::AttackConfig::EPSILON)
+        // Acquire slash FX from pool (AAA style - zero allocations!)
+        SlashFX* fx = slashFxPool.Acquire();
+        if (fx)
         {
-            float inv = 1.0f / std::sqrt(len2);
-            ax *= inv; ay *= inv;
+            fx->active = true;
+            fx->timeMs = 0.0f;
+            fx->durMs = GameConfig::AttackConfig::SLASH_FX_DURATION_MS;
+            fx->x = playerX;
+            fx->y = playerY;
+
+            float ax = in.aimX, ay = in.aimY;
+            float len2 = ax * ax + ay * ay;
+            if (len2 > GameConfig::AttackConfig::EPSILON)
+            {
+                float inv = 1.0f / std::sqrt(len2);
+                ax *= inv; ay *= inv;
+            }
+            else { ax = 0.0f; ay = 1.0f; }
+            fx->ax = ax;
+            fx->ay = ay;
+
+            float dmgDummy = 1.0f, radMult = 1.0f;
+            GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+            fx->radMult = radMult;
+
+            const SlashParams sp = GetSlashParams(radMult);
+            fx->cosHalfAngle = sp.cosHalfAngle;
         }
-        else { ax = 0.0f; ay = 1.0f; }
-        slashFx.ax = ax;
-        slashFx.ay = ay;
-
-        float dmgDummy = 1.0f, radMult = 1.0f;
-        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
-        slashFx.radMult = radMult;
-
-        const SlashParams sp = GetSlashParams(radMult);
-        slashFx.cosHalfAngle = sp.cosHalfAngle;
     }
 
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
@@ -230,30 +264,34 @@ void AttackSystem::Process(const AttackInput& in,
         meteorCooldownMs = GameConfig::AttackConfig::METEOR_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::METEOR_SOUND, false);
 
-        // start meteor FX (at landing point)
-        float ax = in.aimX, ay = in.aimY;
-        float len2 = ax * ax + ay * ay;
-        if (len2 > GameConfig::AttackConfig::EPSILON)
+        // Acquire meteor FX from pool (AAA style - zero allocations!)
+        MeteorFX* fx = meteorFxPool.Acquire();
+        if (fx)
         {
-            float inv = 1.0f / std::sqrt(len2);
-            ax *= inv; ay *= inv;
+            float ax = in.aimX, ay = in.aimY;
+            float len2 = ax * ax + ay * ay;
+            if (len2 > GameConfig::AttackConfig::EPSILON)
+            {
+                float inv = 1.0f / std::sqrt(len2);
+                ax *= inv; ay *= inv;
+            }
+            else { ax = 0.0f; ay = 1.0f; }
+
+            float dmgDummy = 1.0f, radMult = 1.0f;
+            GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
+
+            const MeteorParams mp = GetMeteorParams(radMult);
+            const float tx = playerX + ax * mp.targetDist;
+            const float ty = playerY + ay * mp.targetDist;
+
+            fx->active = true;
+            fx->timeMs = 0.0f;
+            fx->durMs = GameConfig::AttackConfig::METEOR_FX_DURATION_MS;
+            fx->x = tx;
+            fx->y = ty;
+            fx->radMult = radMult;
+            fx->radius = mp.radius;
         }
-        else { ax = 0.0f; ay = 1.0f; }
-
-        float dmgDummy = 1.0f, radMult = 1.0f;
-        GetAttackMultsFromScale(playerScale, dmgDummy, radMult);
-
-        const MeteorParams mp = GetMeteorParams(radMult);
-        const float tx = playerX + ax * mp.targetDist;
-        const float ty = playerY + ay * mp.targetDist;
-
-        meteorFx.active = true;
-        meteorFx.timeMs = 0.0f;
-        meteorFx.durMs = GameConfig::AttackConfig::METEOR_FX_DURATION_MS;
-        meteorFx.x = tx;
-        meteorFx.y = ty;
-        meteorFx.radMult = radMult;
-        meteorFx.radius = mp.radius;
     }
 }
 
@@ -294,8 +332,6 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::PULSE_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::PULSE_HIVE_SHAKE_DURATION);
 
     TriggerFearAOE(px, py, zombies, camera);
-
-    //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, float aimY,
@@ -364,8 +400,6 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
 
     if (killed > 0) camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
-
-    //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
 void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, float aimY,
@@ -416,28 +450,29 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
     if (killed > 0) camera.AddShake(GameConfig::AttackConfig::METEOR_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_SHAKE_DURATION);
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::METEOR_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_HIVE_SHAKE_DURATION);
-
-    //TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
 }
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const
 {
-    // SLASH
-    if (slashFx.active)
+    // Render all active SLASH FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        float t = 1.0f - (slashFx.timeMs / slashFx.durMs);
+        const SlashFX* fx = slashFxPool.GetActive(i);
+        if (!fx || !fx->active) continue;
+
+        float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
 
-        const SlashParams sp = GetSlashParams(slashFx.radMult);
+        const SlashParams sp = GetSlashParams(fx->radMult);
         const float range = sp.range;
 
-        float ax = slashFx.ax;
-        float ay = slashFx.ay;
+        float ax = fx->ax;
+        float ay = fx->ay;
 
         float px = -ay;
         float py = ax;
 
-        float theta = std::acos(slashFx.cosHalfAngle);
+        float theta = std::acos(fx->cosHalfAngle);
         float width = std::tan(theta);
 
         float e1x = ax + px * width;
@@ -459,8 +494,8 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         Norm(e1x, e1y);
         Norm(e2x, e2y);
 
-        float sx = slashFx.x - camOffX;
-        float sy = slashFx.y - camOffY;
+        float sx = fx->x - camOffX;
+        float sy = fx->y - camOffY;
 
         float ex1 = sx + e1x * range;
         float ey1 = sy + e1y * range;
@@ -476,18 +511,20 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         App::DrawLine(ex1, ey1, ex2, ey2, r, g, b);
     }
 
-    // PULSE (electric blue ring)
-    if (pulseFx.active)
+    // Render all active PULSE FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        float t = 1.0f - (pulseFx.timeMs / pulseFx.durMs);
+        const PulseFX* fx = pulseFxPool.GetActive(i);
+        if (!fx || !fx->active) continue;
+
+        float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
 
-        float sx = pulseFx.x - camOffX;
-        float sy = pulseFx.y - camOffY;
+        float sx = fx->x - camOffX;
+        float sy = fx->y - camOffY;
 
-        float r = pulseFx.radius;
+        float r = fx->radius;
 
-        // electric blue that fades out
         float cr = 0.20f * t;
         float cg = 0.80f * t;
         float cb = 1.00f * t;
@@ -496,23 +533,22 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::PULSE_INNER_RADIUS_MULT, cr, cg, cb, GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
     }
 
-    // METEOR (fire rings)
-    if (meteorFx.active)
+    // Render all active METEOR FX from pool
+    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
     {
-        float t = 1.0f - (meteorFx.timeMs / meteorFx.durMs);
+        const MeteorFX* fx = meteorFxPool.GetActive(i);
+        if (!fx || !fx->active) continue;
+
+        float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
 
-        float sx = meteorFx.x - camOffX;
-        float sy = meteorFx.y - camOffY;
+        float sx = fx->x - camOffX;
+        float sy = fx->y - camOffY;
 
-        float r = meteorFx.radius;
+        float r = fx->radius;
 
-        // fire palette (all fade with t)
-        // outer: orange
         DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
-        // mid: yellow
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_MID_RADIUS_MULT, 1.00f * t, 0.85f * t, 0.10f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
-        // inner: red
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_INNER_RADIUS_MULT, 1.00f * t, 0.15f * t, 0.02f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
     }
 }

@@ -1,71 +1,91 @@
 #pragma once
 #include <vector>
-#include <memory>
+#include <cassert>
 
-template<typename T>
+// Simple, cache-friendly object pool for AAA performance
+template<typename T, int MaxSize>
 class ObjectPool
 {
 public:
-    explicit ObjectPool(size_t initialSize = 32)
+    ObjectPool()
     {
-        pool.reserve(initialSize);
-        for (size_t i = 0; i < initialSize; ++i)
+        objects.reserve(MaxSize);
+        activeFlags.reserve(MaxSize);
+
+        // Pre-allocate all objects
+        for (int i = 0; i < MaxSize; i++)
         {
-            pool.emplace_back(std::make_unique<T>());
+            objects.emplace_back();
+            activeFlags.push_back(false);
         }
     }
 
-    std::unique_ptr<T> Get()
+    // Acquire an object from the pool
+    T* Acquire()
     {
-        if (!pool.empty())
+        for (int i = 0; i < MaxSize; i++)
         {
-            auto obj = std::move(pool.back());
-            pool.pop_back();
-            return obj;
+            if (!activeFlags[i])
+            {
+                activeFlags[i] = true;
+                return &objects[i];
+            }
         }
-        return std::make_unique<T>();
+
+        // Pool exhausted - this should be tuned in GameConfig
+        assert(false && "Object pool exhausted!");
+        return nullptr;
     }
 
-    void Return(std::unique_ptr<T> obj)
+    // Release an object back to the pool
+    void Release(T* obj)
     {
-        if (obj && pool.size() < maxSize)
+        if (!obj) return;
+
+        // Find the object in our pool
+        for (int i = 0; i < MaxSize; i++)
         {
-            pool.push_back(std::move(obj));
+            if (&objects[i] == obj)
+            {
+                activeFlags[i] = false;
+                return;
+            }
         }
+    }
+
+    // Get active object by index (for iteration) - NON-CONST version
+    T* GetActive(int index)
+    {
+        if (index >= 0 && index < MaxSize && activeFlags[index])
+            return &objects[index];
+        return nullptr;
+    }
+
+    // Get active object by index (for iteration) - CONST version
+    const T* GetActive(int index) const
+    {
+        if (index >= 0 && index < MaxSize && activeFlags[index])
+            return &objects[index];
+        return nullptr;
+    }
+
+    // Count active objects
+    int ActiveCount() const
+    {
+        int count = 0;
+        for (bool active : activeFlags)
+            if (active) count++;
+        return count;
+    }
+
+    // Reset all objects (useful for game restart)
+    void Clear()
+    {
+        for (int i = 0; i < MaxSize; i++)
+            activeFlags[i] = false;
     }
 
 private:
-    std::vector<std::unique_ptr<T>> pool;
-    static constexpr size_t maxSize = 128;
+    std::vector<T> objects;        // Pre-allocated objects
+    std::vector<bool> activeFlags; // Track which are in use
 };
-
-namespace GamePools
-{
-    // Commonly used temporary objects
-    struct TempVectors
-    {
-        std::vector<int> indices;
-        std::vector<float> positions;
-
-        void Clear()
-        {
-            indices.clear();
-            positions.clear();
-        }
-    };
-
-    class PoolManager
-    {
-    public:
-        static PoolManager& Instance()
-        {
-            static PoolManager instance;
-            return instance;
-        }
-
-        ObjectPool<TempVectors>& GetTempVectorPool() { return tempVectorPool; }
-
-    private:
-        ObjectPool<TempVectors> tempVectorPool{ 16 };
-    };
-}
