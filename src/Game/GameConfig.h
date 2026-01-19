@@ -399,6 +399,25 @@ namespace GameConfig
         static constexpr float HP_BAR_OFFSET_Y = 12.0f;
         static constexpr float ANIM_TIME_RESET = 100000.0f;
 
+        // Hive Death VFX - Explosion and Meteor
+        static constexpr float EXPLOSION_DURATION_MS = 800.0f;  // Longer for satisfying effect
+        static constexpr float EXPLOSION_RINGS = 5.0f;           // Number of expanding rings
+        static constexpr float EXPLOSION_MAX_RADIUS_MULT = 3.5f; // How far explosion expands (mult of hive radius)
+        static constexpr float METEOR_DROP_HEIGHT = 400.0f;      // Meteor drops from above
+        static constexpr float METEOR_DROP_DURATION_MS = 600.0f; // Meteor fall time
+        static constexpr float METEOR_IMPACT_RADIUS = 80.0f;     // Impact circle radius
+        static constexpr float DEBRIS_COUNT = 12.0f;             // Flying debris pieces
+        
+        // Explosion colors (fiery orange/yellow)
+        static constexpr float EXPLOSION_R = 1.0f;
+        static constexpr float EXPLOSION_G = 0.6f;
+        static constexpr float EXPLOSION_B = 0.1f;
+        
+        // Meteor colors (hot falling object)
+        static constexpr float METEOR_R = 1.0f;
+        static constexpr float METEOR_G = 0.3f;
+        static constexpr float METEOR_B = 0.05f;
+
         // Use shared math constants
         static constexpr float TWO_PI = MathConstants::TWO_PI;
         static constexpr float SECONDS_PER_MINUTE = 60.0f;

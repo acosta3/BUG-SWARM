@@ -1,9 +1,11 @@
-// HiveSystem.h - AAA Quality Version
+﻿// HiveSystem.h - AAA Quality Version
 #pragma once
 #include <vector>
 
 class ZombieSystem;
 class NavGrid;
+class AttackSystem;  // ✅ NEW: Forward declaration
+class CameraSystem;  // ✅ NEW: Forward declaration
 
 struct Hive
 {
@@ -32,8 +34,9 @@ public:
     // Rendering
     void Render(float camOffX, float camOffY) const;
 
-    // Combat
-    bool DamageHiveAt(float wx, float wy, float hitRadius, float damage);
+    // Combat - ✅ UPDATED: Now accepts optional AttackSystem and CameraSystem pointers
+    bool DamageHiveAt(float wx, float wy, float hitRadius, float damage, 
+                      AttackSystem* attacks = nullptr, CameraSystem* camera = nullptr);
 
     // State queries
     int AliveCount() const;

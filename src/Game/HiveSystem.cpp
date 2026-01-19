@@ -1,8 +1,10 @@
-// HiveSystem.cpp - AAA Quality Version
+﻿// HiveSystem.cpp - AAA Quality Version
 #include "HiveSystem.h"
 #include "GameConfig.h"
 #include "ZombieSystem.h"
 #include "NavGrid.h"
+#include "AttackSystem.h"  // ✅ NEW: Include for explosion trigger
+#include "CameraSystem.h"   // ✅ NEW: Include for camera reference
 #include "../ContestAPI/app.h"
 
 #include <cmath>
@@ -267,7 +269,8 @@ void HiveSystem::Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid&
 }
 
 // -------------------- Combat --------------------
-bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage)
+bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage, 
+                               AttackSystem* attacks, CameraSystem* camera)
 {
     bool hitAny = false;
 
@@ -280,6 +283,7 @@ bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage)
         const float combinedRadius = h.radius + hitRadius;
         if (DistSq(wx, wy, h.x, h.y) <= combinedRadius * combinedRadius)
         {
+            const bool wasAlive = h.alive;  // ✅ NEW: Track if it was alive before damage
             h.hp -= damage;
             hitAny = true;
 
@@ -288,6 +292,12 @@ bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage)
             {
                 h.hp = 0.0f;
                 h.alive = false;
+
+                // ✅ NEW: Trigger explosion VFX when hive dies
+                if (wasAlive && attacks && camera)
+                {
+                    attacks->TriggerHiveExplosion(h.x, h.y, h.radius, *camera);
+                }
             }
         }
     }

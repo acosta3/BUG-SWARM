@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "ObjectPool.h"
 
 struct AttackInput
@@ -46,6 +46,17 @@ struct MeteorFX
     float radius = 120.0f;
 };
 
+// ✅ NEW: Hive Explosion FX
+struct HiveExplosionFX
+{
+    bool active = false;
+    float timeMs = 0.0f;
+    float durMs = 800.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    float baseRadius = 30.0f;
+};
+
 class ZombieSystem;
 class HiveSystem;
 class CameraSystem;
@@ -65,6 +76,9 @@ public:
         CameraSystem& camera);
 
     void RenderFX(float camOffX, float camOffY) const;
+
+    // ✅ NEW: Trigger hive explosion
+    void TriggerHiveExplosion(float x, float y, float hiveRadius, CameraSystem& camera);
 
     float GetPulseCooldownMs() const { return pulseCooldownMs; }
     float GetSlashCooldownMs() const { return slashCooldownMs; }
@@ -90,7 +104,8 @@ private:
     int lastMeteorKills = 0;
 
     // OBJECT POOLS - AAA style!
-    ObjectPool<SlashFX, 16> slashFxPool;   // Max 16 simultaneous slashes
-    ObjectPool<PulseFX, 16> pulseFxPool;   // Max 16 simultaneous pulses
-    ObjectPool<MeteorFX, 16> meteorFxPool; // Max 16 simultaneous meteors
+    ObjectPool<SlashFX, 16> slashFxPool;
+    ObjectPool<PulseFX, 16> pulseFxPool;
+    ObjectPool<MeteorFX, 16> meteorFxPool;
+    ObjectPool<HiveExplosionFX, 8> hiveExplosionPool; // ✅ NEW: Max 8 hive explosions
 };

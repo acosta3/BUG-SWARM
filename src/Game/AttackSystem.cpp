@@ -160,6 +160,19 @@ void AttackSystem::Update(float deltaTimeMs)
             }
         }
         });
+
+    // ✅ NEW: Update hive explosions
+    hiveExplosionPool.ForEach([deltaTimeMs, this](HiveExplosionFX* fx) {
+        if (fx && fx->active)
+        {
+            fx->timeMs += deltaTimeMs;
+            if (fx->timeMs >= fx->durMs)
+            {
+                fx->active = false;
+                hiveExplosionPool.Release(fx);
+            }
+        }
+        });
 }
 
 static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
@@ -312,7 +325,7 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
     lastPulseKills = killed;
 
     const float hiveDamage = GameConfig::AttackConfig::PULSE_HIVE_DAMAGE * dmgMult;
-    const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage);
+    const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage, this, &camera);
 
     if (killed > 0) camera.AddShake(GameConfig::AttackConfig::PULSE_SHAKE_STRENGTH, GameConfig::AttackConfig::PULSE_SHAKE_DURATION);
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::PULSE_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::PULSE_HIVE_SHAKE_DURATION);
@@ -382,7 +395,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     const float slashHitRadius = GameConfig::AttackConfig::SLASH_HIT_RADIUS * radMult;
 
     const float hiveDamage = GameConfig::AttackConfig::SLASH_HIVE_DAMAGE * dmgMult;
-    const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage);
+    const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage, this, &camera);
 
     if (killed > 0) camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
@@ -432,10 +445,30 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     lastMeteorKills = killed;
 
     const float hiveDamage = GameConfig::AttackConfig::METEOR_HIVE_DAMAGE * dmgMult;
-    const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage);
+    const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage, this, &camera);
 
     if (killed > 0) camera.AddShake(GameConfig::AttackConfig::METEOR_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_SHAKE_DURATION);
     if (hitHive)    camera.AddShake(GameConfig::AttackConfig::METEOR_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_HIVE_SHAKE_DURATION);
+}
+
+void AttackSystem::TriggerHiveExplosion(float x, float y, float hiveRadius, CameraSystem& camera)
+{
+    HiveExplosionFX* fx = hiveExplosionPool.Acquire();
+    if (fx)
+    {
+        fx->active = true;
+        fx->timeMs = 0.0f;
+        fx->durMs = GameConfig::HiveConfig::EXPLOSION_DURATION_MS;
+        fx->x = x;
+        fx->y = y;
+        fx->baseRadius = hiveRadius;
+    }
+
+    // Big camera shake for hive destruction
+    camera.AddShake(15.0f, 0.3f);
+
+    // Play explosion sound
+    App::PlayAudio(GameConfig::AttackConfig::METEOR_SOUND, false);
 }
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const
@@ -528,5 +561,70 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_MID_RADIUS_MULT, 1.00f * t, 0.85f * t, 0.10f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_INNER_RADIUS_MULT, 1.00f * t, 0.15f * t, 0.02f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
+        });
+
+    // ✅ NEW: Render hive explosions
+    hiveExplosionPool.ForEach([&](const HiveExplosionFX* fx) {
+        if (!fx->active) return;
+
+        const float t = fx->timeMs / fx->durMs;
+        const float fadeIn = min(t * 4.0f, 1.0f);
+        const float fadeOut = 1.0f - t;
+        const float alpha = fadeIn * fadeOut;
+
+        const float sx = fx->x - camOffX;
+        const float sy = fx->y - camOffY;
+
+        const float maxRadius = fx->baseRadius * GameConfig::HiveConfig::EXPLOSION_MAX_RADIUS_MULT;
+
+        // Draw expanding explosion rings
+        const int ringCount = static_cast<int>(GameConfig::HiveConfig::EXPLOSION_RINGS);
+        for (int i = 0; i < ringCount; i++)
+        {
+            const float ringT = t + (float)i / (float)ringCount * 0.3f;
+            if (ringT > 1.0f) continue;
+
+            const float radius = maxRadius * ringT;
+            const float ringAlpha = alpha * (1.0f - ringT);
+
+            const float r = GameConfig::HiveConfig::EXPLOSION_R * ringAlpha;
+            const float g = GameConfig::HiveConfig::EXPLOSION_G * ringAlpha;
+            const float b = GameConfig::HiveConfig::EXPLOSION_B * ringAlpha;
+
+            DrawCircleLinesApprox(sx, sy, radius, r, g, b, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
+        }
+
+        // Draw debris particles flying outward
+        const int debrisCount = static_cast<int>(GameConfig::HiveConfig::DEBRIS_COUNT);
+        for (int i = 0; i < debrisCount; i++)
+        {
+            const float angle = (GameConfig::HiveConfig::TWO_PI / (float)debrisCount) * (float)i;
+            const float speed = maxRadius * 1.5f * t;
+            const float dx = std::cos(angle) * speed;
+            const float dy = std::sin(angle) * speed;
+
+            const float debrisAlpha = alpha * 0.8f;
+            const float r = GameConfig::HiveConfig::METEOR_R * debrisAlpha;
+            const float g = GameConfig::HiveConfig::METEOR_G * debrisAlpha;
+            const float b = GameConfig::HiveConfig::METEOR_B * debrisAlpha;
+
+            const float size = 4.0f * (1.0f - t);
+            App::DrawLine(sx + dx - size, sy + dy - size,
+                sx + dx + size, sy + dy + size, r, g, b);
+            App::DrawLine(sx + dx + size, sy + dy - size,
+                sx + dx - size, sy + dy + size, r, g, b);
+        }
+
+        // Draw central flash
+        if (t < 0.2f)
+        {
+            const float flashT = t / 0.2f;
+            const float flashAlpha = (1.0f - flashT) * 1.5f;
+            const float flashRadius = fx->baseRadius * (1.0f + flashT * 2.0f);
+
+            DrawCircleLinesApprox(sx, sy, flashRadius,
+                1.0f * flashAlpha, 0.9f * flashAlpha, 0.8f * flashAlpha,
+                GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
+        }
         });
 }
