@@ -225,9 +225,8 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
     }
 }
 
-// --------------------------------------------
 // UI helpers
-// --------------------------------------------
+
 void WorldRenderer::DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const
 {
     App::DrawLine(x0, y0, x1, y0, r, g, b);
@@ -258,9 +257,8 @@ void WorldRenderer::DrawBarLines(
     DrawRectOutline(x, y, x + w, y + h, 0.95f, 0.95f, 0.95f);
 }
 
-// --------------------------------------------
 // UI
-// --------------------------------------------
+
 void WorldRenderer::RenderUI(
     int simCount, int maxCount,
     int drawnCount, int step,
