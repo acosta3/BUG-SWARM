@@ -55,16 +55,31 @@ void MyGame::Update(float dtMs)
     {
         if (in.startPressed)
         {
-            mode = GameMode::Playing;
+            // Fresh run when leaving menu
+            ResetRun();
 
-            life = LifeState::Playing;
-            lifeTimerMs = 0.0f;
-            player.Revive(true);
-            player.SetMoveInput(0.0f, 0.0f);
+            mode = GameMode::Playing;
 
             float px = 0.0f, py = 0.0f;
             player.GetWorldPosition(px, py);
             camera.Follow(px, py);
+        }
+        return;
+    }
+
+    // -----------------------------
+    // Win screen
+    // -----------------------------
+    if (mode == GameMode::Win)
+    {
+        float px = 0.0f, py = 0.0f;
+        player.GetWorldPosition(px, py);
+        UpdateCamera(dtMs, px, py);
+
+        // Return to menu on Start/Enter
+        if (in.startPressed)
+        {
+            mode = GameMode::Menu;
         }
         return;
     }
@@ -153,6 +168,16 @@ void MyGame::Update(float dtMs)
         return;
     }
 
+    // -----------------------------
+    // WIN CONDITION: all hives dead
+    // -----------------------------
+    if (hives.AliveCount() == 0)
+    {
+        BeginWin();
+        renderer.NotifyKills(zombies.ConsumeKillsThisFrame());
+        return;
+    }
+
     renderer.NotifyKills(zombies.ConsumeKillsThisFrame());
 }
 
@@ -168,6 +193,9 @@ void MyGame::Render()
 
     if (mode == GameMode::Paused)
         RenderPauseOverlay();
+
+    if (mode == GameMode::Win)
+        RenderWinOverlay();
 }
 
 void MyGame::Shutdown()
@@ -450,6 +478,83 @@ void MyGame::RespawnNow()
     camera.Follow(respawnX, respawnY);
 
     player.SetMoveInput(0.0f, 0.0f);
+}
+
+// ------------------------------------------------------------
+// Win + restart
+// ------------------------------------------------------------
+void MyGame::BeginWin()
+{
+    mode = GameMode::Win;
+    player.SetMoveInput(0.0f, 0.0f);
+}
+
+void MyGame::ResetRun()
+{
+    // Rebuild obstacles
+    nav.ClearObstacles();
+    InitObstacles();
+
+    // Reset player
+    player.Revive(true);
+    player.GiveInvulnerability(1000.0f);
+    player.SetWorldPosition(respawnX, respawnY);
+    player.SetNavGrid(&nav);
+    player.SetMoveInput(0.0f, 0.0f);
+
+    // Reset camera
+    camera.Follow(respawnX, respawnY);
+
+    // Reset systems
+    hives.Init();
+    zombies.Init(kMaxZombies, nav);
+
+    // Spawn zombies distributed across alive hives
+    {
+        const int totalToSpawn = kMaxZombies;
+        const auto& hiveList = hives.GetHives();
+
+        int aliveCount = 0;
+        for (const auto& h : hiveList)
+            if (h.alive) aliveCount++;
+
+        if (aliveCount <= 0)
+        {
+            zombies.Spawn(totalToSpawn, respawnX, respawnY);
+        }
+        else
+        {
+            const int base = totalToSpawn / aliveCount;
+            int rem = totalToSpawn % aliveCount;
+
+            for (const auto& h : hiveList)
+            {
+                if (!h.alive) continue;
+
+                int n = base + (rem > 0 ? 1 : 0);
+                if (rem > 0) rem--;
+
+                if (n > 0)
+                    zombies.Spawn(n, h.x, h.y);
+            }
+        }
+    }
+
+    attacks.Init();
+
+    lastAimX = 0.0f;
+    lastAimY = 1.0f;
+    lastTargetCell = -1;
+
+    life = LifeState::Playing;
+    lifeTimerMs = 0.0f;
+}
+
+void MyGame::RenderWinOverlay() const
+{
+    App::Print(470, 520, "YOU WIN");
+    App::Print(280, 490, "Press Enter or Start to return to Menu");
+    App::Print(310, 460, "Destroy all nests to win again");
 }
 
 // ------------------------------------------------------------

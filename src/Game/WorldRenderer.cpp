@@ -39,6 +39,7 @@ static float WrapMod(float v, float m)
     return r;
 }
 
+
 static void DrawVignette()
 {
     // Thickness in pixels

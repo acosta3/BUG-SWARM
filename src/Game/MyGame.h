@@ -21,6 +21,13 @@ public:
     void Shutdown();
 
 private:
+
+    void BeginWin();
+    void ResetRun();              // resets gameplay state (hives/zombies/player/attacks)
+    void RenderWinOverlay() const;
+
+
+
     // Init
     void InitWorld();
     void InitObstacles();
@@ -33,6 +40,7 @@ private:
     void UpdateNavFlowField(float playerX, float playerY);
     void UpdateCamera(float deltaTimeMs, float playerX, float playerY);
     void UpdateZombies(float deltaTimeMs, float playerX, float playerY);
+
 
     AttackInput BuildAttackInput(const InputState& in);
 
@@ -53,7 +61,8 @@ private:
     {
         Menu,
         Playing,
-        Paused
+        Paused,
+        Win
     };
 
     void RenderMenu() const;
