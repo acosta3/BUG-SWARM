@@ -48,6 +48,10 @@ public:
 
     float WorldMaxX() const { return worldMaxX; }
     float WorldMaxY() const { return worldMaxY; }
+
+public:
+    bool IsCircleBlocked(float x, float y, float radius) const;
+
     
 
 private:
@@ -56,7 +60,7 @@ private:
     float worldMaxX = 5000.0f;
     float worldMaxY = 5000.0f;
 
-    float cellSize = 40.0f;
+    float cellSize = 10.0f;
     int gridW = 0;
     int gridH = 0;
 

@@ -146,6 +146,9 @@ private:
     // Swap-remove core (used by Despawn and KillByPlayer)
     void KillSwapRemove(int index);
 
+    bool PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const;
+
+
 private:
     ZombieTuning tuning;
 

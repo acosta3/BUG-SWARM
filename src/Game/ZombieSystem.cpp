@@ -1,9 +1,4 @@
-﻿// ZombieSystem.cpp (FULL + ULTRA SCALE + STAGGERED SEEK)
-// - Includes ALL definitions declared in ZombieSystem.h
-// - Near-only separation grid + capped separation
-// - Far LOD stagger (1/2, 1/4, 1/8) + optional skip NavGrid collision
-// - Near LOD stagger: flow assist + separation to reduce SEEK cost
-
+﻿// ZombieSystem.cpp (FULL + ULTRA SCALE + STAGGERED SEEK + POP-OUT FIX)
 #include "ZombieSystem.h"
 #include "NavGrid.h"
 
@@ -41,6 +36,35 @@ void ZombieSystem::NormalizeSafe(float& x, float& y)
     }
 }
 
+// -------------------- pop-out (unstuck) --------------------
+bool ZombieSystem::PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const
+{
+    if (!nav.IsCircleBlocked(x, y, radius))
+        return true;
+
+    const int angles = 16;
+    const float step = radius * 0.75f;   // how fast we expand
+    const float maxR = radius * 12.0f;   // how far we search
+
+    for (float r = step; r <= maxR; r += step)
+    {
+        for (int a = 0; a < angles; a++)
+        {
+            const float t = (6.2831853f * a) / (float)angles;
+            const float nx = x + std::cos(t) * r;
+            const float ny = y + std::sin(t) * r;
+
+            if (!nav.IsCircleBlocked(nx, ny, radius))
+            {
+                x = nx; y = ny;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 // -------------------- movement (axis slide) --------------------
 bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt,
     const NavGrid& nav, bool& outFullBlocked) const
@@ -50,10 +74,12 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
     const float startX = x;
     const float startY = y;
 
+    const float r = tuning.zombieRadius;
+
     // Full move
     float nx = x + vx * dt;
     float ny = y + vy * dt;
-    if (!nav.IsBlockedWorld(nx, ny))
+    if (!nav.IsCircleBlocked(nx, ny, r))
     {
         x = nx; y = ny;
         return true;
@@ -64,7 +90,7 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
     // Slide X only
     nx = x + vx * dt;
     ny = y;
-    if (!nav.IsBlockedWorld(nx, ny))
+    if (!nav.IsCircleBlocked(nx, ny, r))
     {
         x = nx;
         const float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
@@ -74,7 +100,7 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
     // Slide Y only
     nx = x;
     ny = y + vy * dt;
-    if (!nav.IsBlockedWorld(nx, ny))
+    if (!nav.IsCircleBlocked(nx, ny, r))
     {
         y = ny;
         const float moved2 = (x - startX) * (x - startX) + (y - startY) * (y - startY);
@@ -437,6 +463,9 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
 // -------------------- update --------------------
 int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
+    // dt clamp helps prevent tunneling on frame spikes
+    deltaTimeMs = std::min(deltaTimeMs, 33.0f);
+
     const float dt = deltaTimeMs / 1000.0f;
     if (dt <= 0.0f) return 0;
 
@@ -491,6 +520,13 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     {
         TickTimers(i, deltaTimeMs);
 
+        // If a zombie is already overlapping a wall (spawned there or dt spike),
+        // pop it out before doing anything.
+        if (nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+        {
+            PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
+        }
+
         const uint8_t zt = type[i];
         const ZombieTypeStats& s = typeStats[zt];
 
@@ -521,6 +557,10 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
             bool fullBlocked = false;
             (void)ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
 
+            // If still overlapping, pop out
+            if (fullBlocked || nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+                PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
+
             i++;
             continue;
         }
@@ -541,6 +581,11 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
                 // cheap drift
                 posX[i] += velX[i] * dt;
                 posY[i] += velY[i] * dt;
+
+                // if drift pushed us into a wall (rare), pop out
+                if (nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+                    PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
+
                 i++;
                 continue;
             }
@@ -554,6 +599,10 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
             {
                 posX[i] += velX[i] * dt;
                 posY[i] += velY[i] * dt;
+
+                // even when skipping collision, don't allow being stuck forever
+                if (nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+                    PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
             }
             else
             {
@@ -561,6 +610,9 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
                 const bool moved = ResolveMoveSlide(posX[i], posY[i], velX[i], velY[i], dt, nav, fullBlocked);
                 if (fullBlocked || !moved)
                     flowAssistMs[i] = tuning.flowAssistBurstMs;
+
+                if (fullBlocked || nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+                    PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
             }
 
             i++;
@@ -575,7 +627,6 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
         float sepX = 0.0f;
         float sepY = 0.0f;
 
-        // 1u => every 2 frames; change to 3u for every 4 frames
         const uint32_t sepMask = 1u;
         const bool doSep = (((frameCounter + (uint32_t)i) & sepMask) == 0u);
         if (doSep)
@@ -594,6 +645,10 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
         if (fullBlocked || !moved)
             flowAssistMs[i] = tuning.flowAssistBurstMs;
 
+        // Final safety: if we still overlap a blocked tile, pop out
+        if (fullBlocked || nav.IsCircleBlocked(posX[i], posY[i], tuning.zombieRadius))
+            PopOutIfStuck(posX[i], posY[i], tuning.zombieRadius, nav);
+
         i++;
     }
 
@@ -607,9 +662,6 @@ void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float
 
     for (int i = 0; i < aliveCount; i++)
     {
-        //if (type[i] == PURPLE_ELITE)
-        //    continue;
-
         const float dx = posX[i] - sourceX;
         const float dy = posY[i] - sourceY;
         const float d2 = dx * dx + dy * dy;

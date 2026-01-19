@@ -65,6 +65,56 @@ int NavGrid::CellIndex(float x, float y) const
     return cy * gridW + cx;
 }
 
+bool NavGrid::IsCircleBlocked(float x, float y, float radius) const
+{
+    // Treat outside world as blocked
+    if (x - radius < worldMinX || x + radius > worldMaxX ||
+        y - radius < worldMinY || y + radius > worldMaxY)
+        return true;
+
+    // Cells overlapped by the circle's AABB
+    int cx0 = (int)((x - radius - worldMinX) / cellSize);
+    int cy0 = (int)((y - radius - worldMinY) / cellSize);
+    int cx1 = (int)((x + radius - worldMinX) / cellSize);
+    int cy1 = (int)((y + radius - worldMinY) / cellSize);
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    const float r2 = radius * radius;
+
+    for (int cy = cy0; cy <= cy1; ++cy)
+    {
+        for (int cx = cx0; cx <= cx1; ++cx)
+        {
+            const int idx = cy * gridW + cx;
+            if (blocked[idx] == 0) continue;
+
+            // Cell AABB in world space
+            const float x0 = worldMinX + cx * cellSize;
+            const float y0 = worldMinY + cy * cellSize;
+            const float x1 = x0 + cellSize;
+            const float y1 = y0 + cellSize;
+
+            // Closest point on AABB to circle center
+            const float px = std::clamp(x, x0, x1);
+            const float py = std::clamp(y, y0, y1);
+
+            const float dx = x - px;
+            const float dy = y - py;
+
+            if (dx * dx + dy * dy <= r2)
+                return true;
+        }
+    }
+
+    return false;
+}
+
+
+
 void NavGrid::ClearObstacles()
 {
     std::fill(blocked.begin(), blocked.end(), 0);
