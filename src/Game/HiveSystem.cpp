@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+static float gHiveAnimTimeSec = 0.0f;
+
 static float Rand01()
 {
     return (float)std::rand() / (float)RAND_MAX;
@@ -26,7 +28,7 @@ static float DistSq(float ax, float ay, float bx, float by)
     return dx * dx + dy * dy;
 }
 
-// Yellow circle using line segments
+// Circle using line segments
 static void DrawCircleLines(float cx, float cy, float r, float red, float green, float blue)
 {
     static constexpr float kPi = 3.14159265358979323846f;
@@ -49,21 +51,57 @@ static void DrawCircleLines(float cx, float cy, float r, float red, float green,
     }
 }
 
+static void DrawSpokeRing(float cx, float cy, float radius, float spokeLen, float r, float g, float b, int spokes, float phase)
+{
+    const float twoPi = 6.28318530718f;
+
+    for (int i = 0; i < spokes; i++)
+    {
+        const float a = twoPi * ((float)i / (float)spokes) + phase;
+
+        const float x0 = cx + std::cos(a) * (radius - spokeLen);
+        const float y0 = cy + std::sin(a) * (radius - spokeLen);
+        const float x1 = cx + std::cos(a) * (radius + spokeLen);
+        const float y1 = cy + std::sin(a) * (radius + spokeLen);
+
+        App::DrawLine(x0, y0, x1, y1, r, g, b);
+    }
+}
+
+static void DrawArc(float cx, float cy, float radius, float a0, float a1, float r, float g, float b, int seg = 18)
+{
+    const float twoPi = 6.28318530718f;
+    while (a1 < a0) a1 += twoPi;
+
+    float px = cx + std::cos(a0) * radius;
+    float py = cy + std::sin(a0) * radius;
+
+    for (int i = 1; i <= seg; i++)
+    {
+        const float tt = (float)i / (float)seg;
+        const float a = a0 + (a1 - a0) * tt;
+
+        const float x = cx + std::cos(a) * radius;
+        const float y = cy + std::sin(a) * radius;
+
+        App::DrawLine(px, py, x, y, r, g, b);
+        px = x;
+        py = y;
+    }
+}
+
 void HiveSystem::Init()
 {
     hives.clear();
 
-    // If you want the SAME hive layout every run, keep this fixed seed.
-    // If you want different layout each run, remove this line and seed once in main with time.
+    // Fixed seed so hive layout is the same every run
     std::srand(1337);
 
-    // World is roughly -1500..1500 (your note)
     const float worldMin = -1500.0f;
     const float worldMax = 1500.0f;
 
-    // Tuning knobs
-    const float margin = 220.0f;     // keep away from edges
-    const float minDist = 900.0f;    // spread out distance between hives
+    const float margin = 220.0f;
+    const float minDist = 900.0f;
     const int hiveCount = 5;
     const int maxAttemptsPerHive = 700;
 
@@ -104,7 +142,6 @@ void HiveSystem::Init()
             break;
         }
 
-        // Fallback: if it couldn't find a far-enough spot, still place it somewhere valid.
         if (!found)
         {
             const float x = RandRange(worldMin + margin, worldMax - margin);
@@ -144,6 +181,10 @@ int HiveSystem::AliveCount() const
 void HiveSystem::Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid& nav)
 {
     const float dt = deltaTimeMs / 1000.0f;
+
+    gHiveAnimTimeSec += deltaTimeMs * 0.001f;
+    if (gHiveAnimTimeSec > 100000.0f) gHiveAnimTimeSec = 0.0f;
+
     if (dt <= 0.0f) return;
 
     for (Hive& h : hives)
@@ -217,6 +258,8 @@ bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage)
 
 void HiveSystem::Render(float camOffX, float camOffY) const
 {
+    const float time = gHiveAnimTimeSec;
+
     for (const Hive& h : hives)
     {
         if (!h.alive) continue;
@@ -224,17 +267,35 @@ void HiveSystem::Render(float camOffX, float camOffY) const
         const float sx = h.x - camOffX;
         const float sy = h.y - camOffY;
 
-        DrawCircleLines(sx, sy, h.radius, 1.0f, 1.0f, 0.0f);
-        DrawCircleLines(sx, sy, h.radius * 0.7f, 1.0f, 0.9f, 0.0f);
-        DrawCircleLines(sx, sy, h.radius * 0.4f, 1.0f, 0.8f, 0.0f);
+        const float pulse = 0.5f + 0.5f * std::sinf(time * 3.0f);
+        const float R = h.radius;
 
-        float t = (h.maxHp > 0.0f) ? (h.hp / h.maxHp) : 0.0f;
-        t = std::clamp(t, 0.0f, 1.0f);
+        // Reactor look
+        DrawCircleLines(sx, sy, R, 1.0f, 0.95f, 0.20f);
+        DrawCircleLines(sx, sy, R + 2.0f + pulse * 2.0f, 1.0f, 0.85f, 0.10f);
 
-        const float barW = 60.0f;
-        const float barY = sy - h.radius - 12.0f;
+        DrawSpokeRing(sx, sy, R * 0.82f, 6.0f, 1.0f, 0.55f, 0.10f, 20, time * 1.2f);
 
-        App::DrawLine(sx - barW * 0.5f, barY, sx + barW * 0.5f, barY, 0.2f, 0.2f, 0.2f);
-        App::DrawLine(sx - barW * 0.5f, barY, sx - barW * 0.5f + barW * t, barY, 0.1f, 1.0f, 0.1f);
+        DrawCircleLines(sx, sy, R * 0.55f, 1.0f, 0.85f, 0.10f);
+        DrawCircleLines(sx, sy, R * 0.35f, 1.0f, 0.70f, 0.05f);
+
+        DrawArc(sx, sy, R * 0.55f, time * 1.5f, time * 1.5f + 1.3f, 1.0f, 0.95f, 0.20f);
+        DrawArc(sx, sy, R * 0.35f, -time * 1.8f, -time * 1.8f + 1.1f, 1.0f, 0.70f, 0.10f);
+
+        // HP bar (restored)
+        float hpT = (h.maxHp > 0.0f) ? (h.hp / h.maxHp) : 0.0f;
+        hpT = std::clamp(hpT, 0.0f, 1.0f);
+
+        const float barW = 64.0f;
+        const float barY = sy - R - 12.0f;
+
+        // background
+        App::DrawLine(sx - barW * 0.5f, barY, sx + barW * 0.5f, barY, 0.05f, 0.07f, 0.10f);
+
+        // fill
+        App::DrawLine(sx - barW * 0.5f, barY, sx - barW * 0.5f + barW * hpT, barY, 0.10f, 1.00f, 0.10f);
+
+        // thin tech highlight
+        App::DrawLine(sx - barW * 0.5f, barY - 1.0f, sx + barW * 0.5f, barY - 1.0f, 0.70f, 0.90f, 1.00f);
     }
 }
