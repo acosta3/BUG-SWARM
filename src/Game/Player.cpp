@@ -105,13 +105,20 @@ void Player::TakeDamage(int amount)
     if (dead)
         return;
 
-    // Invulnerability frames
+    // Invulnerability frames - if we're already invulnerable, don't take damage OR play sound
     if (invulnMs > 0.0f)
         return;
 
+    // Actually take damage
     health -= amount;
     if (health < 0)
         health = 0;
+
+    // Play sound ONCE when damage is first applied
+    App::PlayAudio(AudioResources::DAMAGE_SOUND, false);
+
+    // Give invulnerability frames to prevent immediate retriggering
+    invulnMs = 300.0f;  // 500ms of invulnerability
 
     if (health == 0)
     {

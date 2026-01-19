@@ -35,6 +35,7 @@ namespace GameConfig
         static constexpr const char* SQUISH_2 = "./Data/TestData/squish2.wav";
         static constexpr const char* SQUISH_3 = "./Data/TestData/squish3.wav";
         static constexpr const char* GAME_MUSIC = "./Data/TestData/GameLoopMusic.wav";
+        static constexpr const char* DAMAGE_SOUND = "./Data/TestData/ouch.mp3";  // Add this line
 
         static constexpr const char* GetSquishSound(int index)
         {
