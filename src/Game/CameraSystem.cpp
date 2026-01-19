@@ -1,4 +1,6 @@
 #include "CameraSystem.h"
+#include "GameConfig.h"
+#include <cmath>
 
 void CameraSystem::Init(float screenW, float screenH)
 {
@@ -8,7 +10,7 @@ void CameraSystem::Init(float screenW, float screenH)
     targetX = targetY = 0.0f;
     shakeTimeLeft = 0.0f;
     shakeStrength = 0.0f;
-    seed = 1337;
+    seed = GameConfig::CameraConfig::SHAKE_SEED;
 }
 
 void CameraSystem::Follow(float worldX, float worldY)
@@ -21,7 +23,7 @@ void CameraSystem::Update(float deltaTime)
 {
     const float dt = deltaTime / 1000.0f;
 
-    const float followSpeed = 10.0f;
+    const float followSpeed = GameConfig::CameraConfig::FOLLOW_SPEED;
     const float t = 1.0f - std::exp(-followSpeed * dt);
 
     camX += (targetX - camX) * t;
@@ -37,7 +39,6 @@ void CameraSystem::Update(float deltaTime)
         }
     }
 }
-//
 
 void CameraSystem::AddShake(float strengthPixels, float durationSec)
 {
@@ -48,28 +49,28 @@ void CameraSystem::AddShake(float strengthPixels, float durationSec)
 
 float CameraSystem::GetOffsetX() const
 {
-    return camX - screenWidth * 0.5f + GetShakeX();
+    return camX - screenWidth * GameConfig::CameraConfig::SCREEN_HALF_MULT + GetShakeX();
 }
 
 float CameraSystem::GetOffsetY() const
 {
-    return camY - screenHeight * 0.5f + GetShakeY();
+    return camY - screenHeight * GameConfig::CameraConfig::SCREEN_HALF_MULT + GetShakeY();
 }
 
 float CameraSystem::Rand01() const
 {
-    seed = 1664525u * seed + 1013904223u;
-    return (seed & 0x00FFFFFF) / float(0x01000000);
+    seed = GameConfig::CameraConfig::SHAKE_LCG_A * seed + GameConfig::CameraConfig::SHAKE_LCG_C;
+    return (seed & GameConfig::CameraConfig::SHAKE_MASK) / float(GameConfig::CameraConfig::SHAKE_DIVISOR);
 }
 
 float CameraSystem::GetShakeX() const
 {
     if (shakeTimeLeft <= 0.0f) return 0.0f;
-    return (Rand01() * 2.0f - 1.0f) * shakeStrength;
+    return (Rand01() * GameConfig::CameraConfig::SHAKE_RANGE - 1.0f) * shakeStrength;
 }
 
 float CameraSystem::GetShakeY() const
 {
     if (shakeTimeLeft <= 0.0f) return 0.0f;
-    return (Rand01() * 2.0f - 1.0f) * shakeStrength;
+    return (Rand01() * GameConfig::CameraConfig::SHAKE_RANGE - 1.0f) * shakeStrength;
 }

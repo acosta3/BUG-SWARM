@@ -1,5 +1,6 @@
 // WorldRenderer.cpp
 #include "WorldRenderer.h"
+#include "GameConfig.h"
 
 #include "../ContestAPI/app.h"
 
@@ -16,15 +17,6 @@
 #include "Player.h"
 #include "ZombieSystem.h"
 
-static constexpr float kScreenW = 1024.0f;
-static constexpr float kScreenH = 768.0f;
-
-static constexpr int kFullDrawThreshold = 50000;
-static constexpr int kMaxDraw = 10000;
-
-static constexpr float kPi = 3.14159265358979323846f;
-
-
 static float Clamp01f(float v)
 {
     if (v < 0.0f) return 0.0f;
@@ -39,74 +31,69 @@ static float WrapMod(float v, float m)
     return r;
 }
 
-
 static void DrawVignette()
 {
-    // Thickness in pixels
-    const int band = 70;
+    const int band = GameConfig::RenderConfig::VIGNETTE_BAND_SIZE;
 
-    // Dark edge color (keep it subtle)
     const float r = 0.00f, g = 0.00f, b = 0.00f;
 
     // Top
     for (int i = 0; i < band; i++)
     {
-        const float t = 1.0f - (float)i / (float)band;  // 1 -> 0
-        const float a = 0.18f * t;                      // strength
-        App::DrawLine(0.0f, (float)i, 1024.0f, (float)i, r + a, g + a, b + a);
+        const float t = 1.0f - (float)i / (float)band;
+        const float a = GameConfig::RenderConfig::VIGNETTE_TOP_STRENGTH * t;
+        App::DrawLine(0.0f, (float)i, GameConfig::RenderConfig::SCREEN_W, (float)i, r + a, g + a, b + a);
     }
 
     // Bottom
     for (int i = 0; i < band; i++)
     {
         const float t = 1.0f - (float)i / (float)band;
-        const float a = 0.18f * t;
-        const float y = 768.0f - 1.0f - (float)i;
-        App::DrawLine(0.0f, y, 1024.0f, y, r + a, g + a, b + a);
+        const float a = GameConfig::RenderConfig::VIGNETTE_BOTTOM_STRENGTH * t;
+        const float y = GameConfig::RenderConfig::SCREEN_H - 1.0f - (float)i;
+        App::DrawLine(0.0f, y, GameConfig::RenderConfig::SCREEN_W, y, r + a, g + a, b + a);
     }
 
     // Left
     for (int i = 0; i < band; i++)
     {
         const float t = 1.0f - (float)i / (float)band;
-        const float a = 0.16f * t;
+        const float a = GameConfig::RenderConfig::VIGNETTE_SIDE_STRENGTH * t;
         const float x = (float)i;
-        App::DrawLine(x, 0.0f, x, 768.0f, r + a, g + a, b + a);
+        App::DrawLine(x, 0.0f, x, GameConfig::RenderConfig::SCREEN_H, r + a, g + a, b + a);
     }
 
     // Right
     for (int i = 0; i < band; i++)
     {
         const float t = 1.0f - (float)i / (float)band;
-        const float a = 0.16f * t;
-        const float x = 1024.0f - 1.0f - (float)i;
-        App::DrawLine(x, 0.0f, x, 768.0f, r + a, g + a, b + a);
+        const float a = GameConfig::RenderConfig::VIGNETTE_SIDE_STRENGTH * t;
+        const float x = GameConfig::RenderConfig::SCREEN_W - 1.0f - (float)i;
+        App::DrawLine(x, 0.0f, x, GameConfig::RenderConfig::SCREEN_H, r + a, g + a, b + a);
     }
 }
 
-
-
 static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
 {
-    // Base floor tint (not pure black)
-    const float baseR = 0.02f;
-    const float baseG = 0.03f;
-    const float baseB = 0.05f;
-
-    // Scan lines (screen-space is fine, keeps the look crisp)
-    for (int y = 0; y < 768; y += 2)
+    // Scan lines (screen-space)
+    for (int y = 0; y < (int)GameConfig::RenderConfig::SCREEN_H; y += GameConfig::RenderConfig::BG_SCANLINE_STEP)
     {
-        const float t = (y % 8 == 0) ? 0.014f : 0.008f;
-        App::DrawLine(0.0f, (float)y, 1024.0f, (float)y, baseR + t, baseG + t, baseB + t);
+        const float t = (y % GameConfig::RenderConfig::BG_SCANLINE_MOD == 0)
+            ? GameConfig::RenderConfig::BG_SCANLINE_THICK
+            : GameConfig::RenderConfig::BG_SCANLINE_THIN;
+        App::DrawLine(0.0f, (float)y, GameConfig::RenderConfig::SCREEN_W, (float)y,
+            GameConfig::RenderConfig::BG_BASE_R + t,
+            GameConfig::RenderConfig::BG_BASE_G + t,
+            GameConfig::RenderConfig::BG_BASE_B + t);
     }
 
-    const float screenW = 1024.0f;
-    const float screenH = 768.0f;
+    const float screenW = GameConfig::RenderConfig::SCREEN_W;
+    const float screenH = GameConfig::RenderConfig::SCREEN_H;
+    const float grid = GameConfig::RenderConfig::BG_GRID_SIZE;
+    const float majorPulse = GameConfig::RenderConfig::BG_MAJOR_PULSE_BASE +
+        GameConfig::RenderConfig::BG_MAJOR_PULSE_AMP * std::sinf(animTimeSec * GameConfig::RenderConfig::BG_MAJOR_PULSE_FREQ);
 
-    const float grid = 64.0f;
-    const float majorPulse = 0.02f + 0.01f * std::sinf(animTimeSec * 0.6f);
-
-    // World-anchoring: shift pattern by camera offset
+    // World-anchoring
     const float ox = -WrapMod(offX, grid);
     const float oy = -WrapMod(offY, grid);
 
@@ -122,40 +109,36 @@ static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
                 App::DrawLine(0.0f, y + (float)i, screenW, y + (float)i, r, g, b);
         };
 
-    // Draw enough lines to cover screen (+1 cell margin)
     const int cols = (int)(screenW / grid) + 3;
     const int rows = (int)(screenH / grid) + 3;
 
-    // Vertical grid lines (world anchored)
+    // Vertical grid lines
     for (int i = -1; i < cols; i++)
     {
         const float x = ox + (float)i * grid;
-
-        // Major every 4 cells (based on world cell index, not screen)
         const int worldCol = (int)std::floor((offX + x) / grid);
-        const bool major = (worldCol % 4) == 0;
+        const bool major = (worldCol % GameConfig::RenderConfig::BG_GRID_MAJOR_EVERY) == 0;
 
-        const int thick = major ? 3 : 2;
-        const float a = major ? (0.085f + majorPulse) : 0.055f;
+        const int thick = major ? GameConfig::RenderConfig::BG_GRID_THICK_MAJOR : GameConfig::RenderConfig::BG_GRID_THICK_MINOR;
+        const float a = major ? (GameConfig::RenderConfig::BG_GRID_ALPHA_MAJOR + majorPulse) : GameConfig::RenderConfig::BG_GRID_ALPHA_MINOR;
 
         DrawThickV(x, a, a + 0.01f, a + 0.03f, thick);
     }
 
-    // Horizontal grid lines (world anchored)
+    // Horizontal grid lines
     for (int j = -1; j < rows; j++)
     {
         const float y = oy + (float)j * grid;
-
         const int worldRow = (int)std::floor((offY + y) / grid);
-        const bool major = (worldRow % 4) == 0;
+        const bool major = (worldRow % GameConfig::RenderConfig::BG_GRID_MAJOR_EVERY) == 0;
 
-        const int thick = major ? 3 : 2;
-        const float a = major ? (0.085f + majorPulse) : 0.055f;
+        const int thick = major ? GameConfig::RenderConfig::BG_GRID_THICK_MAJOR : GameConfig::RenderConfig::BG_GRID_THICK_MINOR;
+        const float a = major ? (GameConfig::RenderConfig::BG_GRID_ALPHA_MAJOR + majorPulse) : GameConfig::RenderConfig::BG_GRID_ALPHA_MINOR;
 
         DrawThickH(y, a, a + 0.01f, a + 0.03f, thick);
     }
 
-    // Panel seams (world anchored)
+    // Panel seams
     for (int j = -1; j < rows; j++)
     {
         for (int i = -1; i < cols; i++)
@@ -163,53 +146,35 @@ static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
             const float x0 = ox + (float)i * grid;
             const float y0 = oy + (float)j * grid;
 
-            // Alternate using world indices so it doesn't "swim"
             const int wc = (int)std::floor((offX + x0) / grid);
             const int wr = (int)std::floor((offY + y0) / grid);
             const bool alt = ((wc + wr) & 1) != 0;
 
-            const float seam = alt ? 0.075f : 0.060f;
+            const float seam = alt ? GameConfig::RenderConfig::BG_SEAM_ALT_1 : GameConfig::RenderConfig::BG_SEAM_ALT_2;
 
-            // top-left notch
-            App::DrawLine(x0 + 6.0f, y0 + 6.0f, x0 + 20.0f, y0 + 6.0f, seam, seam + 0.01f, seam + 0.03f);
-            App::DrawLine(x0 + 6.0f, y0 + 6.0f, x0 + 6.0f, y0 + 20.0f, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1,
+                x0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_2, y0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1,
+                x0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + GameConfig::RenderConfig::BG_SEAM_OFFSET_2, seam, seam + 0.01f, seam + 0.03f);
 
-            // bottom-right notch
-            App::DrawLine(x0 + grid - 6.0f, y0 + grid - 6.0f, x0 + grid - 20.0f, y0 + grid - 6.0f, seam, seam + 0.01f, seam + 0.03f);
-            App::DrawLine(x0 + grid - 6.0f, y0 + grid - 6.0f, x0 + grid - 6.0f, y0 + grid - 20.0f, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1,
+                x0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_2, y0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1,
+                x0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_1, y0 + grid - GameConfig::RenderConfig::BG_SEAM_OFFSET_2, seam, seam + 0.01f, seam + 0.03f);
         }
     }
 }
 
-
-// Cheap deterministic hash -> [0,1)
 static float Hash01(uint32_t v)
 {
-    v ^= v >> 16;
-    v *= 0x7feb352dU;
-    v ^= v >> 15;
-    v *= 0x846ca68bU;
-    v ^= v >> 16;
-    return (float)(v & 0x00FFFFFFu) / (float)0x01000000u;
+    v ^= v >> GameConfig::HashConfig::HASH_XOR_1;
+    v *= GameConfig::HashConfig::HASH_MULT_1;
+    v ^= v >> GameConfig::HashConfig::HASH_XOR_2;
+    v *= GameConfig::HashConfig::HASH_MULT_2;
+    v ^= v >> GameConfig::HashConfig::HASH_XOR_3;
+    return (float)(v & GameConfig::HashConfig::HASH_MASK) / (float)GameConfig::HashConfig::HASH_DIVISOR;
 }
 
-// Minimal controls block (pure text, no boxes)
-static void PrintControlsMinimal(int x, int y, bool densityView)
-{
-    App::Print(x, y, "Controls");
-    App::Print(x, y - 16, "Move: WASD or Left Stick");
-    App::Print(x, y - 32, "View: V or DPad Down");
-    App::Print(x, y - 48, "Stop Anim: A");
-    App::Print(x, y - 64, "Pulse: Space or B");
-    App::Print(x, y - 80, "Slash: Q or X");
-    App::Print(x, y - 96, "Meteor: E or Y");
-    App::Print(x, y - 112, "Scale: Left/Right Arrow or LB/RB");
-    App::Print(x, y - 128, densityView ? "Mode: Density" : "Mode: Entities");
-}
-
-// --------------------------------------------
-// Public
-// --------------------------------------------
 void WorldRenderer::RenderFrame(
     const CameraSystem& camera,
     Player& player,
@@ -220,9 +185,8 @@ void WorldRenderer::RenderFrame(
     float dtMs,
     bool densityView)
 {
-    // advance wiggle time
     animTimeSec += (dtMs * 0.001f);
-    if (animTimeSec > 100000.0f) animTimeSec = 0.0f;
+    if (animTimeSec > GameConfig::RenderConfig::WIGGLE_TIME_RESET) animTimeSec = 0.0f;
 
     const float offX = camera.GetOffsetX();
     const float offY = camera.GetOffsetY();
@@ -237,12 +201,9 @@ void WorldRenderer::NotifyKills(int kills)
     if (killPopupTimeMs > 0.0f) killPopupCount += kills;
     else killPopupCount = kills;
 
-    killPopupTimeMs = 1200.0f;
+    killPopupTimeMs = GameConfig::RenderConfig::KILL_POPUP_DURATION_MS;
 }
 
-// --------------------------------------------
-// World
-// --------------------------------------------
 void WorldRenderer::RenderWorld(
     float offX, float offY,
     Player& player,
@@ -255,9 +216,6 @@ void WorldRenderer::RenderWorld(
 {
     DrawVignette();
 
-
-    
-
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
@@ -269,8 +227,6 @@ void WorldRenderer::RenderWorld(
     nav.DebugDrawBlocked(offX, offY);
     hives.Render(offX, offY);
     RenderZombies2D(offX, offY, zombies, densityView);
-
-
 
     player.Render(offX, offY);
     attacks.RenderFX(offX, offY);
@@ -294,8 +250,8 @@ void WorldRenderer::RenderWorld(
     }
     else
     {
-        if (simCount > kFullDrawThreshold)
-            step = (simCount + kMaxDraw - 1) / kMaxDraw;
+        if (simCount > GameConfig::RenderConfig::FULL_DRAW_THRESHOLD)
+            step = (simCount + GameConfig::RenderConfig::MAX_DRAW - 1) / GameConfig::RenderConfig::MAX_DRAW;
 
         drawn = (simCount + step - 1) / step;
     }
@@ -315,15 +271,32 @@ void WorldRenderer::RenderWorld(
     );
 }
 
-// --------------------------------------------
-// Zombies 2D
-// --------------------------------------------
 void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& zombies, bool densityView)
 {
-    static const float sizeByType[4] = { 3.0f, 3.5f, 5.0f, 7.0f };
-    static const float rByType[4] = { 0.2f, 1.0f, 0.2f, 0.8f };
-    static const float gByType[4] = { 1.0f, 0.2f, 0.4f, 0.2f };
-    static const float bByType[4] = { 0.2f, 0.2f, 1.0f, 1.0f };
+    static const float sizeByType[4] = {
+        GameConfig::RenderConfig::ZOMBIE_SIZE_GREEN,
+        GameConfig::RenderConfig::ZOMBIE_SIZE_RED,
+        GameConfig::RenderConfig::ZOMBIE_SIZE_BLUE,
+        GameConfig::RenderConfig::ZOMBIE_SIZE_PURPLE
+    };
+    static const float rByType[4] = {
+        GameConfig::RenderConfig::ZOMBIE_R_GREEN,
+        GameConfig::RenderConfig::ZOMBIE_R_RED,
+        GameConfig::RenderConfig::ZOMBIE_R_BLUE,
+        GameConfig::RenderConfig::ZOMBIE_R_PURPLE
+    };
+    static const float gByType[4] = {
+        GameConfig::RenderConfig::ZOMBIE_G_GREEN,
+        GameConfig::RenderConfig::ZOMBIE_G_RED,
+        GameConfig::RenderConfig::ZOMBIE_G_BLUE,
+        GameConfig::RenderConfig::ZOMBIE_G_PURPLE
+    };
+    static const float bByType[4] = {
+        GameConfig::RenderConfig::ZOMBIE_B_GREEN,
+        GameConfig::RenderConfig::ZOMBIE_B_RED,
+        GameConfig::RenderConfig::ZOMBIE_B_BLUE,
+        GameConfig::RenderConfig::ZOMBIE_B_PURPLE
+    };
 
     const int count = zombies.AliveCount();
 
@@ -349,37 +322,32 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
                 const float x = worldX - offX;
                 const float y = worldY - offY;
 
-                if (x < 0.0f || x > kScreenW || y < 0.0f || y > kScreenH)
+                if (x < 0.0f || x > GameConfig::RenderConfig::SCREEN_W || y < 0.0f || y > GameConfig::RenderConfig::SCREEN_H)
                     continue;
 
-                const float intensity = Clamp01((float)n / 20.0f);
+                const float intensity = Clamp01((float)n / GameConfig::RenderConfig::DENSITY_INTENSITY_DIVISOR);
 
                 const float r = intensity;
-                const float g = 0.2f + 0.8f * (1.0f - 0.5f * intensity);
-                const float b = 0.1f;
+                const float g = GameConfig::RenderConfig::DENSITY_G_BASE +
+                    GameConfig::RenderConfig::DENSITY_G_RANGE * (1.0f - GameConfig::RenderConfig::DENSITY_G_FACTOR * intensity);
+                const float b = GameConfig::RenderConfig::DENSITY_B;
 
-                // no wiggle in density view (cleaner)
-                DrawZombieTri(x, y, cs * 0.45f, 0.0f, r, g, b);
+                DrawZombieTri(x, y, cs * GameConfig::RenderConfig::DENSITY_CELL_SCALE, 0.0f, r, g, b);
             }
         }
         return;
     }
 
     int step = 1;
-    if (count > kFullDrawThreshold)
-        step = (count + kMaxDraw - 1) / kMaxDraw;
-
-    // Wiggle tuning
-    const float baseFreq = 2.2f;
-    const float freqJitter = 1.1f;
-    const float angleAmp = 0.22f;
+    if (count > GameConfig::RenderConfig::FULL_DRAW_THRESHOLD)
+        step = (count + GameConfig::RenderConfig::MAX_DRAW - 1) / GameConfig::RenderConfig::MAX_DRAW;
 
     for (int i = 0; i < count; i += step)
     {
         const float x = zombies.GetX(i) - offX;
         const float y = zombies.GetY(i) - offY;
 
-        if (x < 0.0f || x > kScreenW || y < 0.0f || y > kScreenH)
+        if (x < 0.0f || x > GameConfig::RenderConfig::SCREEN_W || y < 0.0f || y > GameConfig::RenderConfig::SCREEN_H)
             continue;
 
         const int t = zombies.GetType(i);
@@ -395,20 +363,16 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
             b *= 0.25f;
         }
 
-        // per-zombie phase and slightly different speed
-        const uint32_t seed = (uint32_t)i * 2654435761u ^ (uint32_t)(t * 97u);
-        const float phase = Hash01(seed) * (2.0f * kPi);
-        const float freq = baseFreq + Hash01(seed ^ 0xA53A9E3Du) * freqJitter;
+        const uint32_t seed = (uint32_t)i * GameConfig::RenderConfig::WIGGLE_SEED_MULT ^ (uint32_t)(t * GameConfig::RenderConfig::WIGGLE_SEED_ADD);
+        const float phase = Hash01(seed) * GameConfig::MathConstants::TWO_PI;
+        const float freq = GameConfig::RenderConfig::WIGGLE_BASE_FREQ + Hash01(seed ^ GameConfig::RenderConfig::WIGGLE_SEED_XOR) * GameConfig::RenderConfig::WIGGLE_FREQ_JITTER;
 
-        const float angle = std::sinf(animTimeSec * (2.0f * kPi) * freq + phase) * angleAmp;
+        const float angle = std::sinf(animTimeSec * GameConfig::MathConstants::TWO_PI * freq + phase) * GameConfig::RenderConfig::WIGGLE_ANGLE_AMP;
 
         DrawZombieTri(x, y, sizeByType[t], angle, r, g, b);
     }
 }
 
-// --------------------------------------------
-// UI helpers
-// --------------------------------------------
 void WorldRenderer::DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const
 {
     App::DrawLine(x0, y0, x1, y0, r, g, b);
@@ -425,23 +389,23 @@ void WorldRenderer::DrawBarLines(
     t = Clamp01(t);
 
     const int lines = (int)std::lround(h);
-    const float fillW = w * t;
+    const float fillW = (w * t) < GameConfig::RenderConfig::BAR_FILL_MIN_WIDTH ? 0.0f : (w * t);
 
     for (int i = 0; i < lines; i++)
     {
         const float yy = y + (float)i;
 
         App::DrawLine(x, yy, x + w, yy, bgR, bgG, bgB);
-        if (fillW > 0.5f)
+        if (fillW > GameConfig::RenderConfig::BAR_FILL_MIN_WIDTH)
             App::DrawLine(x, yy, x + fillW, yy, fillR, fillG, fillB);
     }
 
-    DrawRectOutline(x, y, x + w, y + h, 0.95f, 0.95f, 0.95f);
+    DrawRectOutline(x, y, x + w, y + h,
+        GameConfig::RenderConfig::BAR_OUTLINE_R,
+        GameConfig::RenderConfig::BAR_OUTLINE_G,
+        GameConfig::RenderConfig::BAR_OUTLINE_B);
 }
 
-// --------------------------------------------
-// UI
-// --------------------------------------------
 void WorldRenderer::RenderUI(
     int simCount, int maxCount,
     int drawnCount, int step,
@@ -450,12 +414,8 @@ void WorldRenderer::RenderUI(
     int hivesAlive, int hivesTotal,
     float pulseCdMs, float slashCdMs, float meteorCdMs)
 {
-    // Minimal controls (top-left)
-    //PrintControlsMinimal(18, 740, densityView);
-
-    // Stats HUD (top-right-ish)
-    const float x = 500.0f;
-    const float y = 80.0f;
+    const float x = GameConfig::RenderConfig::UI_HUD_X;
+    const float y = GameConfig::RenderConfig::UI_HUD_Y;
 
     char bufZ[128];
     std::snprintf(bufZ, sizeof(bufZ), "Zombies: %d/%d  Draw: %d  Step: %d", simCount, maxCount, drawnCount, step);
@@ -467,11 +427,17 @@ void WorldRenderer::RenderUI(
 
     const float hpT = (maxHp > 0) ? ((float)hp / (float)maxHp) : 0.0f;
     DrawBarLines(
-        x + 120.0f, y - 34.0f,
-        360.0f, 14.0f,
+        x + GameConfig::RenderConfig::UI_HP_BAR_X_OFFSET,
+        y - GameConfig::RenderConfig::UI_HP_BAR_Y_OFFSET,
+        GameConfig::RenderConfig::UI_HP_BAR_WIDTH,
+        GameConfig::RenderConfig::UI_HP_BAR_HEIGHT,
         hpT,
-        0.20f, 0.20f, 0.20f,
-        0.10f, 1.00f, 0.10f
+        GameConfig::RenderConfig::BAR_BG_R,
+        GameConfig::RenderConfig::BAR_BG_G,
+        GameConfig::RenderConfig::BAR_BG_B,
+        GameConfig::RenderConfig::HP_BAR_R,
+        GameConfig::RenderConfig::HP_BAR_G,
+        GameConfig::RenderConfig::HP_BAR_B
     );
 
     char bufCD[160];
@@ -482,22 +448,30 @@ void WorldRenderer::RenderUI(
     );
     App::Print((int)x, (int)(y - 54.0f), bufCD);
 
-    const float pulseT = 1.0f - Clamp01(pulseCdMs / 200.0f);
-    const float slashT = 1.0f - Clamp01(slashCdMs / 350.0f);
-    const float meteorT = 1.0f - Clamp01(meteorCdMs / 900.0f);
+    const float pulseT = 1.0f - Clamp01(pulseCdMs / GameConfig::RenderConfig::UI_PULSE_CD_MAX);
+    const float slashT = 1.0f - Clamp01(slashCdMs / GameConfig::RenderConfig::UI_SLASH_CD_MAX);
+    const float meteorT = 1.0f - Clamp01(meteorCdMs / GameConfig::RenderConfig::UI_METEOR_CD_MAX);
 
-    DrawBarLines(x + 120.0f, y - 70.0f, 110.0f, 10.0f, pulseT, 0.15f, 0.15f, 0.15f, 0.95f, 0.95f, 0.20f);
-    DrawBarLines(x + 240.0f, y - 70.0f, 110.0f, 10.0f, slashT, 0.15f, 0.15f, 0.15f, 0.95f, 0.50f, 0.20f);
-    DrawBarLines(x + 360.0f, y - 70.0f, 110.0f, 10.0f, meteorT, 0.15f, 0.15f, 0.15f, 0.95f, 0.20f, 0.20f);
+    DrawBarLines(x + GameConfig::RenderConfig::UI_HP_BAR_X_OFFSET, y - GameConfig::RenderConfig::UI_CD_BAR_Y_OFFSET,
+        GameConfig::RenderConfig::UI_CD_BAR_WIDTH, GameConfig::RenderConfig::UI_CD_BAR_HEIGHT, pulseT,
+        GameConfig::RenderConfig::CD_BG_R, GameConfig::RenderConfig::CD_BG_G, GameConfig::RenderConfig::CD_BG_B,
+        GameConfig::RenderConfig::PULSE_CD_R, GameConfig::RenderConfig::PULSE_CD_G, GameConfig::RenderConfig::PULSE_CD_B);
+
+    DrawBarLines(x + GameConfig::RenderConfig::UI_HP_BAR_X_OFFSET + GameConfig::RenderConfig::UI_CD_BAR_SPACING, y - GameConfig::RenderConfig::UI_CD_BAR_Y_OFFSET,
+        GameConfig::RenderConfig::UI_CD_BAR_WIDTH, GameConfig::RenderConfig::UI_CD_BAR_HEIGHT, slashT,
+        GameConfig::RenderConfig::CD_BG_R, GameConfig::RenderConfig::CD_BG_G, GameConfig::RenderConfig::CD_BG_B,
+        GameConfig::RenderConfig::SLASH_CD_R, GameConfig::RenderConfig::SLASH_CD_G, GameConfig::RenderConfig::SLASH_CD_B);
+
+    DrawBarLines(x + GameConfig::RenderConfig::UI_HP_BAR_X_OFFSET + GameConfig::RenderConfig::UI_CD_BAR_SPACING * 2.0f, y - GameConfig::RenderConfig::UI_CD_BAR_Y_OFFSET,
+        GameConfig::RenderConfig::UI_CD_BAR_WIDTH, GameConfig::RenderConfig::UI_CD_BAR_HEIGHT, meteorT,
+        GameConfig::RenderConfig::CD_BG_R, GameConfig::RenderConfig::CD_BG_G, GameConfig::RenderConfig::CD_BG_B,
+        GameConfig::RenderConfig::METEOR_CD_R, GameConfig::RenderConfig::METEOR_CD_G, GameConfig::RenderConfig::METEOR_CD_B);
 
     char bufH[128];
     std::snprintf(bufH, sizeof(bufH), "Nests: %d/%d alive", hivesAlive, hivesTotal);
     App::Print(440, 700, bufH);
 }
 
-// --------------------------------------------
-// Kill popup above player
-// --------------------------------------------
 void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerScreenY, float dtMs)
 {
     if (killPopupTimeMs <= 0.0f)
@@ -509,32 +483,38 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
     killPopupTimeMs -= dtMs;
     if (killPopupTimeMs < 0.0f) killPopupTimeMs = 0.0f;
 
-    float x = playerScreenX - 40.0f;
-    float y = playerScreenY - 60.0f;
+    float x = playerScreenX - GameConfig::RenderConfig::KILL_POPUP_OFFSET_X;
+    float y = playerScreenY - GameConfig::RenderConfig::KILL_POPUP_OFFSET_Y;
 
-    x = std::clamp(x, 10.0f, kScreenW - 260.0f);
-    y = std::clamp(y, 10.0f, kScreenH - 30.0f);
+    x = std::clamp(x, GameConfig::RenderConfig::KILL_POPUP_MIN_X, GameConfig::RenderConfig::SCREEN_W - GameConfig::RenderConfig::KILL_POPUP_MAX_X_OFFSET);
+    y = std::clamp(y, GameConfig::RenderConfig::KILL_POPUP_MIN_Y, GameConfig::RenderConfig::SCREEN_H - GameConfig::RenderConfig::KILL_POPUP_MAX_Y_OFFSET);
 
-    float r = 1.0f, g = 0.90f, b = 0.20f;
-    int thicknessPasses =2;
+    float r = GameConfig::RenderConfig::KILL_POPUP_NORMAL_R;
+    float g = GameConfig::RenderConfig::KILL_POPUP_NORMAL_G;
+    float b = GameConfig::RenderConfig::KILL_POPUP_NORMAL_B;
+    int thicknessPasses = 2;
     float popY = 0.0f;
 
     const char* suffix = "";
 
-    if (killPopupCount >= 100 && killPopupCount < 1000)
+    if (killPopupCount >= GameConfig::RenderConfig::KILL_POPUP_FRENZY_THRESHOLD && killPopupCount < GameConfig::RenderConfig::KILL_POPUP_UNSTOPPABLE_THRESHOLD)
     {
-        r = 1.0f; g = 0.55f; b = 0.10f;
+        r = GameConfig::RenderConfig::KILL_POPUP_FRENZY_R;
+        g = GameConfig::RenderConfig::KILL_POPUP_FRENZY_G;
+        b = GameConfig::RenderConfig::KILL_POPUP_FRENZY_B;
         thicknessPasses = 4;
         suffix = "  KILL FRENZY";
     }
-    else if (killPopupCount >= 1000)
+    else if (killPopupCount >= GameConfig::RenderConfig::KILL_POPUP_UNSTOPPABLE_THRESHOLD)
     {
-        r = 1.0f; g = 0.15f; b = 0.15f;
+        r = GameConfig::RenderConfig::KILL_POPUP_UNSTOPPABLE_R;
+        g = GameConfig::RenderConfig::KILL_POPUP_UNSTOPPABLE_G;
+        b = GameConfig::RenderConfig::KILL_POPUP_UNSTOPPABLE_B;
         thicknessPasses = 8;
         suffix = "  UNSTOPPABLE ALL CHAOS";
 
-        const float t01 = Clamp01(killPopupTimeMs / 1200.0f);
-        popY = (1.0f - t01) * -10.0f;
+        const float t01 = Clamp01(killPopupTimeMs / GameConfig::RenderConfig::KILL_POPUP_DURATION_MS);
+        popY = (1.0f - t01) * GameConfig::RenderConfig::KILL_POPUP_POP_OFFSET;
     }
 
     char kb[64];
@@ -567,13 +547,16 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
 
     if (suffix[0] != '\0')
     {
-        const int approxWidth = (int)std::strlen(kb) * 10;
-        PrintThick(ix + approxWidth + 10, iy, suffix);
+        const int approxWidth = (int)std::strlen(kb) * GameConfig::RenderConfig::KILL_POPUP_CHAR_WIDTH;
+        PrintThick(ix + approxWidth + GameConfig::RenderConfig::KILL_POPUP_TEXT_SPACING, iy, suffix);
     }
 
-    const float t = Clamp01(killPopupTimeMs / 1200.0f);
+    const float t = Clamp01(killPopupTimeMs / GameConfig::RenderConfig::KILL_POPUP_DURATION_MS);
     DrawBarLines(
-        x, (y - 12.0f) + popY, 180.0f, 6.0f, t,
+        x, (y - GameConfig::RenderConfig::KILL_POPUP_BAR_OFFSET_Y) + popY,
+        GameConfig::RenderConfig::KILL_POPUP_BAR_WIDTH,
+        GameConfig::RenderConfig::KILL_POPUP_BAR_HEIGHT,
+        t,
         0.10f, 0.10f, 0.10f,
         r, g, b
     );
@@ -590,21 +573,17 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
             oy = px * s + py * c;
         };
 
-    // Triangle points in local space
     float ax, ay, bx, by, cx, cy;
     Rot(0.0f, -size, ax, ay);
     Rot(-size, size, bx, by);
     Rot(size, size, cx, cy);
 
-    // ---------------------------
-    // Body: shadow + fill + outline + inner panel
-    // ---------------------------
+    // Shadow/backplate
     {
-        // Shadow/backplate (makes it pop off the floor)
-        const float shadowScale = 1.18f;
-        const float sr = r * 0.10f;
-        const float sg = g * 0.10f;
-        const float sb = b * 0.10f;
+        const float shadowScale = GameConfig::RenderConfig::ZOMBIE_SHADOW_SCALE;
+        const float sr = r * GameConfig::RenderConfig::ZOMBIE_SHADOW_MULT;
+        const float sg = g * GameConfig::RenderConfig::ZOMBIE_SHADOW_MULT;
+        const float sb = b * GameConfig::RenderConfig::ZOMBIE_SHADOW_MULT;
 
         App::DrawTriangle(
             x + ax * shadowScale, y + ay * shadowScale, 0, 1,
@@ -612,11 +591,13 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
             x + cx * shadowScale, y + cy * shadowScale, 0, 1,
             sr, sg, sb, sr, sg, sb, sr, sg, sb, false
         );
+    }
 
-        // Main fill (slightly toned down so it isn't a neon blob)
-        const float fr = r * 0.85f;
-        const float fg = g * 0.85f;
-        const float fb = b * 0.85f;
+    // Main fill
+    {
+        const float fr = r * GameConfig::RenderConfig::ZOMBIE_FILL_MULT;
+        const float fg = g * GameConfig::RenderConfig::ZOMBIE_FILL_MULT;
+        const float fb = b * GameConfig::RenderConfig::ZOMBIE_FILL_MULT;
 
         App::DrawTriangle(
             x + ax, y + ay, 0, 1,
@@ -625,79 +606,96 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
             fr, fg, fb, fr, fg, fb, fr, fg, fb, false
         );
 
-        // Outline (thin bright edge)
-        const float orr = min(1.0f, fr + 0.20f);
-        const float org = min(1.0f, fg + 0.20f);
-        const float orb = min(1.0f, fb + 0.25f);
+        // Outline (removed std::min)
+        const float orr = (fr + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_R) > 1.0f ? 1.0f : (fr + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_R);
+        const float org = (fg + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_G) > 1.0f ? 1.0f : (fg + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_G);
+        const float orb = (fb + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_B) > 1.0f ? 1.0f : (fb + GameConfig::RenderConfig::ZOMBIE_OUTLINE_ADD_B);
 
         App::DrawLine(x + ax, y + ay, x + bx, y + by, orr, org, orb);
         App::DrawLine(x + bx, y + by, x + cx, y + cy, orr, org, orb);
         App::DrawLine(x + cx, y + cy, x + ax, y + ay, orr, org, orb);
 
-        // Inner “carapace panel” highlight (gives depth)
-        const float inner = 0.55f;
+        // Inner panel (removed std::min)
+        const float inner = GameConfig::RenderConfig::ZOMBIE_INNER_SCALE;
+
+        const float ir1 = (fr + 0.18f) > 1.0f ? 1.0f : (fr + 0.18f);
+        const float ig1 = (fg + 0.18f) > 1.0f ? 1.0f : (fg + 0.18f);
+        const float ib1 = (fb + 0.22f) > 1.0f ? 1.0f : (fb + 0.22f);
+
+        const float ir2 = (fr + 0.10f) > 1.0f ? 1.0f : (fr + 0.10f);
+        const float ig2 = (fg + 0.10f) > 1.0f ? 1.0f : (fg + 0.10f);
+        const float ib2 = (fb + 0.12f) > 1.0f ? 1.0f : (fb + 0.12f);
+
+        const float ir3 = (fr + 0.05f) > 1.0f ? 1.0f : (fr + 0.05f);
+        const float ig3 = (fg + 0.05f) > 1.0f ? 1.0f : (fg + 0.05f);
+        const float ib3 = (fb + 0.06f) > 1.0f ? 1.0f : (fb + 0.06f);
+
         App::DrawTriangle(
             x + ax * inner, y + ay * inner, 0, 1,
             x + bx * inner, y + by * inner, 0, 1,
             x + cx * inner, y + cy * inner, 0, 1,
-            min(1.0f, fr + 0.18f), min(1.0f, fg + 0.18f),min(1.0f, fb + 0.22f),
-            min(1.0f, fr + 0.10f), min(1.0f, fg + 0.10f), min(1.0f, fb + 0.12f),
-            min(1.0f, fr + 0.05f), min(1.0f, fg + 0.05f), min(1.0f, fb + 0.06f),
+            ir1, ig1, ib1,
+            ir2, ig2, ib2,
+            ir3, ig3, ib3,
             false
         );
     }
 
-    // ---------------------------
-    // Eyes: tiny glowing crosses
-    // ---------------------------
+    // Eyes
     {
         float ex1, ey1, ex2, ey2;
-        Rot(-size * 0.22f, -size * 0.18f, ex1, ey1);
-        Rot(size * 0.22f, -size * 0.18f, ex2, ey2);
+        Rot(-size * GameConfig::RenderConfig::ZOMBIE_EYE_OFFSET_X, -size * GameConfig::RenderConfig::ZOMBIE_EYE_OFFSET_Y, ex1, ey1);
+        Rot(size * GameConfig::RenderConfig::ZOMBIE_EYE_OFFSET_X, -size * GameConfig::RenderConfig::ZOMBIE_EYE_OFFSET_Y, ex2, ey2);
 
-        const float eye = max(1.0f, size * 0.18f);
+        // Removed std::max
+        const float eyeSize = size * GameConfig::RenderConfig::ZOMBIE_EYE_SIZE;
+        const float eye = eyeSize > 1.0f ? eyeSize : 1.0f;
 
-        // Slight cyan glow (sci-fi)
-        const float er = 0.70f;
-        const float eg = 0.95f;
-        const float eb = 1.00f;
+        App::DrawLine(x + ex1 - eye, y + ey1, x + ex1 + eye, y + ey1,
+            GameConfig::RenderConfig::ZOMBIE_EYE_R,
+            GameConfig::RenderConfig::ZOMBIE_EYE_G,
+            GameConfig::RenderConfig::ZOMBIE_EYE_B);
+        App::DrawLine(x + ex1, y + ey1 - eye, x + ex1, y + ey1 + eye,
+            GameConfig::RenderConfig::ZOMBIE_EYE_R,
+            GameConfig::RenderConfig::ZOMBIE_EYE_G,
+            GameConfig::RenderConfig::ZOMBIE_EYE_B);
 
-        App::DrawLine(x + ex1 - eye, y + ey1, x + ex1 + eye, y + ey1, er, eg, eb);
-        App::DrawLine(x + ex1, y + ey1 - eye, x + ex1, y + ey1 + eye, er, eg, eb);
-
-        App::DrawLine(x + ex2 - eye, y + ey2, x + ex2 + eye, y + ey2, er, eg, eb);
-        App::DrawLine(x + ex2, y + ey2 - eye, x + ex2, y + ey2 + eye, er, eg, eb);
+        App::DrawLine(x + ex2 - eye, y + ey2, x + ex2 + eye, y + ey2,
+            GameConfig::RenderConfig::ZOMBIE_EYE_R,
+            GameConfig::RenderConfig::ZOMBIE_EYE_G,
+            GameConfig::RenderConfig::ZOMBIE_EYE_B);
+        App::DrawLine(x + ex2, y + ey2 - eye, x + ex2, y + ey2 + eye,
+            GameConfig::RenderConfig::ZOMBIE_EYE_R,
+            GameConfig::RenderConfig::ZOMBIE_EYE_G,
+            GameConfig::RenderConfig::ZOMBIE_EYE_B);
     }
 
-  
+    // Legs
+    {
+        const float lx = size * GameConfig::RenderConfig::ZOMBIE_LEG_LX;
+        const float ly = size * GameConfig::RenderConfig::ZOMBIE_LEG_LY;
 
-    // ---------------------------
-    // Legs (same as before)
-    // ---------------------------
-    const float lx = size * 1.3f;
-    const float ly = size * 0.7f;
+        float p1x, p1y, p2x, p2y;
 
-    float p1x, p1y, p2x, p2y;
+        Rot(-size * 0.6f, 0.0f, p1x, p1y); Rot(-lx, -ly, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 
-    Rot(-size * 0.6f, 0.0f, p1x, p1y); Rot(-lx, -ly, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+        Rot(-size * 0.7f, size * 0.4f, p1x, p1y); Rot(-lx, 0.0f, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 
-    Rot(-size * 0.7f, size * 0.4f, p1x, p1y); Rot(-lx, 0.0f, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+        Rot(-size * 0.5f, size * 0.8f, p1x, p1y); Rot(-lx, ly, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 
-    Rot(-size * 0.5f, size * 0.8f, p1x, p1y); Rot(-lx, ly, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+        Rot(size * 0.6f, 0.0f, p1x, p1y); Rot(lx, -ly, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 
-    Rot(size * 0.6f, 0.0f, p1x, p1y); Rot(lx, -ly, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+        Rot(size * 0.7f, size * 0.4f, p1x, p1y); Rot(lx, 0.0f, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 
-    Rot(size * 0.7f, size * 0.4f, p1x, p1y); Rot(lx, 0.0f, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
-
-    Rot(size * 0.5f, size * 0.8f, p1x, p1y); Rot(lx, ly, p2x, p2y);
-    App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+        Rot(size * 0.5f, size * 0.8f, p1x, p1y); Rot(lx, ly, p2x, p2y);
+        App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
+    }
 }
-
 
 float WorldRenderer::Clamp01(float v)
 {
