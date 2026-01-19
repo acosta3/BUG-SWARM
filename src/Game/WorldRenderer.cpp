@@ -39,6 +39,52 @@ static float WrapMod(float v, float m)
     return r;
 }
 
+static void DrawVignette()
+{
+    // Thickness in pixels
+    const int band = 70;
+
+    // Dark edge color (keep it subtle)
+    const float r = 0.00f, g = 0.00f, b = 0.00f;
+
+    // Top
+    for (int i = 0; i < band; i++)
+    {
+        const float t = 1.0f - (float)i / (float)band;  // 1 -> 0
+        const float a = 0.18f * t;                      // strength
+        App::DrawLine(0.0f, (float)i, 1024.0f, (float)i, r + a, g + a, b + a);
+    }
+
+    // Bottom
+    for (int i = 0; i < band; i++)
+    {
+        const float t = 1.0f - (float)i / (float)band;
+        const float a = 0.18f * t;
+        const float y = 768.0f - 1.0f - (float)i;
+        App::DrawLine(0.0f, y, 1024.0f, y, r + a, g + a, b + a);
+    }
+
+    // Left
+    for (int i = 0; i < band; i++)
+    {
+        const float t = 1.0f - (float)i / (float)band;
+        const float a = 0.16f * t;
+        const float x = (float)i;
+        App::DrawLine(x, 0.0f, x, 768.0f, r + a, g + a, b + a);
+    }
+
+    // Right
+    for (int i = 0; i < band; i++)
+    {
+        const float t = 1.0f - (float)i / (float)band;
+        const float a = 0.16f * t;
+        const float x = 1024.0f - 1.0f - (float)i;
+        App::DrawLine(x, 0.0f, x, 768.0f, r + a, g + a, b + a);
+    }
+}
+
+
+
 static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
 {
     // Base floor tint (not pure black)
@@ -206,6 +252,7 @@ void WorldRenderer::RenderWorld(
     float dtMs,
     bool densityView)
 {
+    DrawVignette();
 
 
     
@@ -221,6 +268,8 @@ void WorldRenderer::RenderWorld(
     nav.DebugDrawBlocked(offX, offY);
     hives.Render(offX, offY);
     RenderZombies2D(offX, offY, zombies, densityView);
+
+
 
     player.Render(offX, offY);
     attacks.RenderFX(offX, offY);
