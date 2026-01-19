@@ -1,4 +1,4 @@
-// AttackSystem.cpp
+﻿// AttackSystem.cpp
 #include "AttackSystem.h"
 #include "ZombieSystem.h"
 #include "HiveSystem.h"
@@ -109,9 +109,6 @@ void AttackSystem::Init()
     lastPulseKills = 0;
     lastSlashKills = 0;
     lastMeteorKills = 0;
-
-    // Object pools are auto-initialized in constructor
-    // No need to manually clear - they pre-allocate on construction
 }
 
 void AttackSystem::TickCooldown(float& cd, float dtMs)
@@ -127,10 +124,8 @@ void AttackSystem::Update(float deltaTimeMs)
     TickCooldown(slashCooldownMs, deltaTimeMs);
     TickCooldown(meteorCooldownMs, deltaTimeMs);
 
-    // Update all active slash FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        SlashFX* fx = slashFxPool.GetActive(i);
+    // ✅ OPTIMIZED: Use ForEach instead of manual loop checking all slots
+    slashFxPool.ForEach([deltaTimeMs, this](SlashFX* fx) {
         if (fx && fx->active)
         {
             fx->timeMs += deltaTimeMs;
@@ -140,12 +135,9 @@ void AttackSystem::Update(float deltaTimeMs)
                 slashFxPool.Release(fx);
             }
         }
-    }
+        });
 
-    // Update all active pulse FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        PulseFX* fx = pulseFxPool.GetActive(i);
+    pulseFxPool.ForEach([deltaTimeMs, this](PulseFX* fx) {
         if (fx && fx->active)
         {
             fx->timeMs += deltaTimeMs;
@@ -155,12 +147,9 @@ void AttackSystem::Update(float deltaTimeMs)
                 pulseFxPool.Release(fx);
             }
         }
-    }
+        });
 
-    // Update all active meteor FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        MeteorFX* fx = meteorFxPool.GetActive(i);
+    meteorFxPool.ForEach([deltaTimeMs, this](MeteorFX* fx) {
         if (fx && fx->active)
         {
             fx->timeMs += deltaTimeMs;
@@ -170,7 +159,7 @@ void AttackSystem::Update(float deltaTimeMs)
                 meteorFxPool.Release(fx);
             }
         }
-    }
+        });
 }
 
 static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
@@ -204,7 +193,6 @@ void AttackSystem::Process(const AttackInput& in,
         pulseCooldownMs = GameConfig::AttackConfig::PULSE_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::PULSE_SOUND, false);
 
-        // Acquire pulse FX from pool (AAA style - zero allocations!)
         PulseFX* fx = pulseFxPool.Acquire();
         if (fx)
         {
@@ -228,7 +216,6 @@ void AttackSystem::Process(const AttackInput& in,
         slashCooldownMs = GameConfig::AttackConfig::SLASH_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::SLASH_SOUND, false);
 
-        // Acquire slash FX from pool (AAA style - zero allocations!)
         SlashFX* fx = slashFxPool.Acquire();
         if (fx)
         {
@@ -264,7 +251,6 @@ void AttackSystem::Process(const AttackInput& in,
         meteorCooldownMs = GameConfig::AttackConfig::METEOR_COOLDOWN_MS;
         App::PlayAudio(GameConfig::AttackConfig::METEOR_SOUND, false);
 
-        // Acquire meteor FX from pool (AAA style - zero allocations!)
         MeteorFX* fx = meteorFxPool.Acquire();
         if (fx)
         {
@@ -454,11 +440,9 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const
 {
-    // Render all active SLASH FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        const SlashFX* fx = slashFxPool.GetActive(i);
-        if (!fx || !fx->active) continue;
+    // ✅ OPTIMIZED: Use ForEach for rendering
+    slashFxPool.ForEach([&](const SlashFX* fx) {
+        if (!fx->active) return;
 
         float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
@@ -509,13 +493,10 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         App::DrawLine(sx, sy, ex1, ey1, r, g, b);
         App::DrawLine(sx, sy, ex2, ey2, r, g, b);
         App::DrawLine(ex1, ey1, ex2, ey2, r, g, b);
-    }
+        });
 
-    // Render all active PULSE FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        const PulseFX* fx = pulseFxPool.GetActive(i);
-        if (!fx || !fx->active) continue;
+    pulseFxPool.ForEach([&](const PulseFX* fx) {
+        if (!fx->active) return;
 
         float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
@@ -531,13 +512,10 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
 
         DrawCircleLinesApprox(sx, sy, r, cr, cg, cb, GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::PULSE_INNER_RADIUS_MULT, cr, cg, cb, GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
-    }
+        });
 
-    // Render all active METEOR FX from pool
-    for (int i = 0; i < GameConfig::PoolConfig::VFX_POOL_SIZE; i++)
-    {
-        const MeteorFX* fx = meteorFxPool.GetActive(i);
-        if (!fx || !fx->active) continue;
+    meteorFxPool.ForEach([&](const MeteorFX* fx) {
+        if (!fx->active) return;
 
         float t = 1.0f - (fx->timeMs / fx->durMs);
         t = Clamp01(t);
@@ -550,5 +528,5 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_MID_RADIUS_MULT, 1.00f * t, 0.85f * t, 0.10f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_INNER_RADIUS_MULT, 1.00f * t, 0.15f * t, 0.02f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
-    }
+        });
 }
