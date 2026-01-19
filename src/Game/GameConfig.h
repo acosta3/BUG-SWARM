@@ -14,7 +14,7 @@ namespace GameConfig
     
     struct SystemCapacity
     {
-        static constexpr int MAX_ZOMBIES = 200'000;
+        static constexpr int MAX_ZOMBIES = 100'000;  // Reduced from 200'000 for demo
         static constexpr int MAX_HIVES = 10;
         static constexpr int MAX_OBSTACLES = 1000;
     };
@@ -159,8 +159,8 @@ namespace GameConfig
     {
         static constexpr float SCREEN_W = 1024.0f;
         static constexpr float SCREEN_H = 768.0f;
-        static constexpr int FULL_DRAW_THRESHOLD = 200'000;
-        static constexpr int MAX_DRAW = 200'000;
+        static constexpr int FULL_DRAW_THRESHOLD = 100'000;  // Updated to match new max
+        static constexpr int MAX_DRAW = 100'000;              // Updated to match new max
 
         // Vignette settings
         static constexpr int VIGNETTE_BAND_SIZE = 70;
