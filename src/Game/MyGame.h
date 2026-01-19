@@ -48,6 +48,17 @@ private:
     void RespawnNow();
     bool InputLocked() const;
 
+    // NEW: Menu / Pause game mode
+    enum class GameMode
+    {
+        Menu,
+        Playing,
+        Paused
+    };
+
+    void RenderMenu() const;
+    void RenderPauseOverlay() const;
+
 private:
     InputSystem input;
     Player player;
@@ -75,6 +86,9 @@ private:
     float lifeTimerMs = 0.0f;
 
     // Tuning knobs
-    float deathPauseMs = 900.0f;      // how long you stay dead with frozen input
-    float respawnGraceMs = 650.0f;    // how long input stays frozen after respawn
+    float deathPauseMs = 900.0f;
+    float respawnGraceMs = 650.0f;
+
+    // NEW
+    GameMode mode = GameMode::Menu;
 };

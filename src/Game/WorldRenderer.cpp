@@ -35,6 +35,20 @@ static float Hash01(uint32_t v)
     return (float)(v & 0x00FFFFFFu) / (float)0x01000000u;
 }
 
+// Minimal controls block (pure text, no boxes)
+static void PrintControlsMinimal(int x, int y, bool densityView)
+{
+    App::Print(x, y, "Controls");
+    App::Print(x, y - 16, "Move: WASD or Left Stick");
+    App::Print(x, y - 32, "View: V or DPad Down");
+    App::Print(x, y - 48, "Stop Anim: A");
+    App::Print(x, y - 64, "Pulse: Space or B");
+    App::Print(x, y - 80, "Slash: Q or X");
+    App::Print(x, y - 96, "Meteor: E or Y");
+    App::Print(x, y - 112, "Scale: Left/Right Arrow or LB/RB");
+    App::Print(x, y - 128, densityView ? "Mode: Density" : "Mode: Entities");
+}
+
 // --------------------------------------------
 // Public
 // --------------------------------------------
@@ -48,7 +62,7 @@ void WorldRenderer::RenderFrame(
     float dtMs,
     bool densityView)
 {
-    // NEW: advance wiggle time
+    // advance wiggle time
     animTimeSec += (dtMs * 0.001f);
     if (animTimeSec > 100000.0f) animTimeSec = 0.0f;
 
@@ -189,9 +203,9 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
         step = (count + kMaxDraw - 1) / kMaxDraw;
 
     // Wiggle tuning
-    const float baseFreq = 2.2f;     // Hz-ish feel
-    const float freqJitter = 1.1f;   // each bug a bit different
-    const float angleAmp = 0.22f;    // radians (about 12.6 deg), drop to 0.15f if too much
+    const float baseFreq = 2.2f;
+    const float freqJitter = 1.1f;
+    const float angleAmp = 0.22f;
 
     for (int i = 0; i < count; i += step)
     {
@@ -214,7 +228,7 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
             b *= 0.25f;
         }
 
-        // NEW: per-zombie phase and slightly different speed
+        // per-zombie phase and slightly different speed
         const uint32_t seed = (uint32_t)i * 2654435761u ^ (uint32_t)(t * 97u);
         const float phase = Hash01(seed) * (2.0f * kPi);
         const float freq = baseFreq + Hash01(seed ^ 0xA53A9E3Du) * freqJitter;
@@ -225,8 +239,9 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
     }
 }
 
+// --------------------------------------------
 // UI helpers
-
+// --------------------------------------------
 void WorldRenderer::DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const
 {
     App::DrawLine(x0, y0, x1, y0, r, g, b);
@@ -257,8 +272,9 @@ void WorldRenderer::DrawBarLines(
     DrawRectOutline(x, y, x + w, y + h, 0.95f, 0.95f, 0.95f);
 }
 
+// --------------------------------------------
 // UI
-
+// --------------------------------------------
 void WorldRenderer::RenderUI(
     int simCount, int maxCount,
     int drawnCount, int step,
@@ -267,10 +283,12 @@ void WorldRenderer::RenderUI(
     int hivesAlive, int hivesTotal,
     float pulseCdMs, float slashCdMs, float meteorCdMs)
 {
+    // Minimal controls (top-left)
+    //PrintControlsMinimal(18, 740, densityView);
+
+    // Stats HUD (top-right-ish)
     const float x = 500.0f;
     const float y = 80.0f;
-
-    App::Print((int)x, (int)y, densityView ? "View: Density (V/X)" : "View: Entities (V/X)");
 
     char bufZ[128];
     std::snprintf(bufZ, sizeof(bufZ), "Zombies: %d/%d  Draw: %d  Step: %d", simCount, maxCount, drawnCount, step);

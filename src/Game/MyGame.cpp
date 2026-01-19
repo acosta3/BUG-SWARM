@@ -4,12 +4,12 @@
 
 #include <cmath>
 #include <cstdio>
-
+#include <cstdlib>
 
 static void PlayRandomSquish()
 {
     const int r = std::rand() % 3;
-    
+
     switch (r)
     {
     case 0:
@@ -30,12 +30,67 @@ void MyGame::Init()
     InitObstacles();
     InitSystems();
 
+    mode = GameMode::Menu;
+
     App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true);
 }
 
 void MyGame::Update(float dtMs)
 {
     lastDtMs = dtMs;
+
+    // Always read input, even in menu/pause, so we can Start/Resume
+    input.SetEnabled(true);
+    input.Update(dtMs);
+
+    const InputState& in = input.GetState();
+
+    // -----------------------------
+    // Menu
+    // -----------------------------
+    if (mode == GameMode::Menu)
+    {
+        // Start game
+        if (in.startPressed)
+        {
+            mode = GameMode::Playing;
+
+            // Optional: make sure we are in a clean playing state
+            life = LifeState::Playing;
+            lifeTimerMs = 0.0f;
+            player.Revive(true);
+            player.SetMoveInput(0.0f, 0.0f);
+
+            float px = 0.0f, py = 0.0f;
+            player.GetWorldPosition(px, py);
+            camera.Follow(px, py);
+        }
+        return;
+    }
+
+    // -----------------------------
+    // Pause toggle (only when not in menu)
+    // -----------------------------
+    if (in.pausePressed)
+    {
+        if (mode == GameMode::Playing)
+        {
+            mode = GameMode::Paused;
+            player.SetMoveInput(0.0f, 0.0f);
+            return;
+        }
+        else if (mode == GameMode::Paused)
+        {
+            mode = GameMode::Playing;
+            return;
+        }
+    }
+
+    // If paused, do not simulate gameplay
+    if (mode == GameMode::Paused)
+        return;
+
+    // From here: mode == Playing
 
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
@@ -63,7 +118,7 @@ void MyGame::Update(float dtMs)
                 lifeTimerMs = 0.0f;
             }
         }
-        else // RespawnGrace
+        else
         {
             // Cooldowns can tick during grace
             attacks.Update(dtMs);
@@ -95,7 +150,6 @@ void MyGame::Update(float dtMs)
 
     UpdateZombies(dtMs, px, py);
 
-    // If the player died this frame, enter death state
     if (player.IsDead())
     {
         BeginDeath(px, py);
@@ -108,7 +162,17 @@ void MyGame::Update(float dtMs)
 
 void MyGame::Render()
 {
+    if (mode == GameMode::Menu)
+    {
+        RenderMenu();
+        return;
+    }
+
+    // Render the world normally (even when paused, we want the frozen frame + overlay)
     renderer.RenderFrame(camera, player, nav, zombies, hives, attacks, lastDtMs, densityView);
+
+    if (mode == GameMode::Paused)
+        RenderPauseOverlay();
 }
 
 void MyGame::Shutdown()
@@ -121,27 +185,22 @@ void MyGame::Shutdown()
 // ------------------------------------------------------------
 void MyGame::InitWorld()
 {
-    // Player
     player.Init();
 
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
-    // Save spawn from initial position
     respawnX = px;
     respawnY = py;
 
     player.SetNavGrid(&nav);
 
-    // Camera
     camera.Init(1024.0f, 768.0f);
     camera.Follow(px, py);
 
-    // Nav
     nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f);
     nav.ClearObstacles();
 
-    // Life state
     life = LifeState::Playing;
     lifeTimerMs = 0.0f;
 }
@@ -158,28 +217,20 @@ void MyGame::InitObstacles()
             nav.AddObstacleRect(x - half, y - half, x + half, y + half);
         };
 
-    // -------------------------
-    // Core pattern (yours)
-    // -------------------------
-    // Row 1
     AddBlock(-400.0f, -240.0f);
     AddBlock(-200.0f, -250.0f);
     AddBlock(20.0f, -240.0f);
 
-    // Row 2
     AddBlock(-260.0f, -120.0f);
     AddBlock(-40.0f, -120.0f);
 
-    // Row 3
     AddBlock(-400.0f, 20.0f);
     AddBlock(-200.0f, 10.0f);
     AddBlock(20.0f, 20.0f);
 
-    // Row 4
     AddBlock(-260.0f, 140.0f);
     AddBlock(-40.0f, 140.0f);
 
-    // Thin bar (yours)
     {
         float x0 = -300.0f * spread;
         float x1 = 100.0f * spread;
@@ -188,12 +239,6 @@ void MyGame::InitObstacles()
         nav.AddObstacleRect(x0, y - barHalfH, x1, y + barHalfH);
     }
 
-    // -------------------------
-    // NEW: bigger "ring" around the play area
-    // Keeps the same spacing feel, but adds more structure on screen
-    // -------------------------
-
-    // Outer columns (left/right)
     AddBlock(-560.0f, -240.0f);
     AddBlock(-560.0f, -120.0f);
     AddBlock(-560.0f, 20.0f);
@@ -204,7 +249,6 @@ void MyGame::InitObstacles()
     AddBlock(180.0f, 20.0f);
     AddBlock(180.0f, 140.0f);
 
-    // Outer rows (top/bottom)
     AddBlock(-400.0f, -360.0f);
     AddBlock(-200.0f, -360.0f);
     AddBlock(20.0f, -360.0f);
@@ -213,13 +257,11 @@ void MyGame::InitObstacles()
     AddBlock(-200.0f, 260.0f);
     AddBlock(20.0f, 260.0f);
 
-    // Corner accents (makes the screen edges feel “designed”)
     AddBlock(-560.0f, -360.0f);
     AddBlock(180.0f, -360.0f);
     AddBlock(-560.0f, 260.0f);
     AddBlock(180.0f, 260.0f);
 
-    // Small inner accents to break empty space
     AddBlock(-120.0f, -40.0f);
     AddBlock(-120.0f, 90.0f);
     AddBlock(-320.0f, -40.0f);
@@ -232,7 +274,6 @@ void MyGame::InitSystems()
     player.GetWorldPosition(px, py);
 
     hives.Init();
-
     zombies.Init(kMaxZombies, nav);
 
     const int totalToSpawn = kMaxZombies;
@@ -277,11 +318,13 @@ void MyGame::InitSystems()
 // ------------------------------------------------------------
 bool MyGame::InputLocked() const
 {
+    // Locked only for death/grace. Pause/menu is handled by GameMode.
     return (life != LifeState::Playing);
 }
 
 void MyGame::UpdateInput(float dtMs)
 {
+    // When dead/grace, keep your old "neutral" behavior
     input.SetEnabled(!InputLocked());
     input.Update(dtMs);
 
@@ -305,7 +348,6 @@ void MyGame::UpdatePlayer(float dtMs)
 
     player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, dtMs);
 
-    // Update last aim when moving
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
     if (len2 > 0.0001f)
     {
@@ -351,13 +393,12 @@ void MyGame::UpdateAttacks(float dtMs)
 
     attacks.Process(a, px, py, player.GetScale(), zombies, hives, camera);
 
-    // Healing rule (keep as you had it)
     const int kills = attacks.GetLastSlashKills();
     if (kills > 0)
     {
         const float healPerKill = 1.5f;
         player.Heal(kills * healPerKill);
-		PlayRandomSquish();
+        PlayRandomSquish();
     }
 }
 
@@ -379,7 +420,6 @@ void MyGame::UpdateCamera(float dtMs, float playerX, float playerY)
 
 void MyGame::UpdateZombies(float dtMs, float playerX, float playerY)
 {
-    // During death/grace, zombies can move but cannot damage the player
     if (life != LifeState::Playing || player.IsDead())
     {
         (void)zombies.Update(dtMs, playerX, playerY, nav);
@@ -419,4 +459,58 @@ void MyGame::RespawnNow()
     camera.Follow(respawnX, respawnY);
 
     player.SetMoveInput(0.0f, 0.0f);
+}
+
+// ------------------------------------------------------------
+// Menu and Pause UI
+// ------------------------------------------------------------
+void MyGame::RenderMenu() const
+{
+    // Title
+    App::Print(420, 520, "BUG SWARM");
+
+    // Start
+    App::Print(340, 490, "Start:  Enter   or   Start");
+
+    // Keyboard section
+    App::Print(340, 450, "Keyboard");
+    App::Print(340, 430, "Move:   W A S D");
+    App::Print(340, 410, "View:   V");
+    App::Print(340, 390, "Pulse:  Space");
+    App::Print(340, 370, "Slash:  F");
+    App::Print(340, 350, "Meteor: E");
+    App::Print(340, 330, "Scale:  Left/Right Arrow");
+    App::Print(340, 310, "Pause:  Esc");
+
+    // Controller section
+    App::Print(580, 450, "Controller");
+    App::Print(580, 430, "Move:   Left Stick");
+    App::Print(580, 410, "View:   DPad Down");
+    App::Print(580, 390, "Pulse:  B");
+    App::Print(580, 370, "Slash:  X");
+    App::Print(580, 350, "Meteor: Y");
+    App::Print(580, 330, "Scale:  LB / RB");
+    App::Print(580, 310, "Pause:  Start");
+}
+
+void MyGame::RenderPauseOverlay() const
+{
+    App::Print(470, 520, "PAUSED");
+    App::Print(330, 490, "Resume:  Enter or Start");
+    App::Print(330, 470, "Pause:   Esc   or Start");
+
+    // Keep it minimal but still show controls (same layout idea)
+    App::Print(340, 430, "Keyboard");
+    App::Print(340, 410, "Move:   W A S D");
+    App::Print(340, 390, "View:   V");
+    App::Print(340, 370, "Pulse:  Space");
+    App::Print(340, 350, "Slash:  Q");
+    App::Print(340, 330, "Meteor: E");
+
+    App::Print(580, 430, "Controller");
+    App::Print(580, 410, "Move:   Left Stick");
+    App::Print(580, 390, "View:   DPad Down");
+    App::Print(580, 370, "Pulse:  B");
+    App::Print(580, 350, "Slash:  X");
+    App::Print(580, 330, "Meteor: Y");
 }

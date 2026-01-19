@@ -61,23 +61,19 @@ void InputSystem::Update(float dt)
 {
     state = {};
 
-    // If input is disabled, return neutral state
     if (!inputEnabled)
     {
-        // Reset edge detectors so inputs don't "pop" when re-enabled
-        prevV = prevSpace = prevQ = prevE = false;
+        prevV = prevSpace = prevF = prevE = false;
+        prevEnter = prevEsc = false;
         return;
     }
 
-    // Keyboard axes
     const float kx = AxisFromKeys(App::KEY_A, App::KEY_D);
     const float ky = AxisFromKeys(App::KEY_S, App::KEY_W);
 
-    // Active controller
     padIndex = FindActivePadIndex();
     const CController& pad = CSimpleControllers::GetInstance().GetController(padIndex);
 
-    // Controller axes (deadzone)
     float sx = pad.GetLeftThumbStickX();
     float sy = pad.GetLeftThumbStickY();
 
@@ -85,11 +81,9 @@ void InputSystem::Update(float dt)
     if (std::fabs(sx) < DEAD) sx = 0.0f;
     if (std::fabs(sy) < DEAD) sy = 0.0f;
 
-    // Combine
     state.moveX = std::clamp(kx + sx, -1.0f, 1.0f);
     state.moveY = std::clamp(ky + sy, -1.0f, 1.0f);
 
-    // Prevent faster diagonal
     float lenSq = state.moveX * state.moveX + state.moveY * state.moveY;
     if (lenSq > 1.0f)
     {
@@ -97,9 +91,6 @@ void InputSystem::Update(float dt)
         state.moveX *= invLen;
         state.moveY *= invLen;
     }
-
-    // A: just pressed
-    state.stopAnimPressed = pad.CheckButton(App::BTN_A, true);
 
     // Toggle view: V key just-pressed OR Dpad Down
     bool vNow = App::IsKeyPressed(App::KEY_V);
@@ -113,11 +104,12 @@ void InputSystem::Update(float dt)
     prevSpace = spaceNow;
     state.pulsePressed = state.pulsePressed || pad.CheckButton(App::BTN_B, true);
 
-    // Slash: Q just-pressed OR controller X
-    bool qNow = App::IsKeyPressed(App::KEY_Q);
-    state.slashPressed = (qNow && !prevQ);
-    prevQ = qNow;
+    // Slash: F just-pressed OR controller 
+    bool fNow = App::IsKeyPressed(App::KEY_F);
+    state.slashPressed = (fNow && !prevF);
+    prevF = fNow;
     state.slashPressed = state.slashPressed || pad.CheckButton(App::BTN_X, true);
+
 
     // Meteor: E just-pressed OR controller Y
     bool eNow = App::IsKeyPressed(App::KEY_E);
@@ -131,4 +123,14 @@ void InputSystem::Update(float dt)
 
     state.scaleUpHeld = rightNow || pad.CheckButton(App::BTN_RBUMPER, false);
     state.scaleDownHeld = leftNow || pad.CheckButton(App::BTN_LBUMPER, false);
+
+    // NEW: Start (Enter or controller Start) just-pressed
+    const bool enterNow = App::IsKeyPressed(App::KEY_ENTER);
+    state.startPressed = (enterNow && !prevEnter) || pad.CheckButton(App::BTN_START, true);
+    prevEnter = enterNow;
+
+    // NEW: Pause (Esc or controller Start) just-pressed
+    const bool escNow = App::IsKeyPressed(App::KEY_ESC);
+    state.pausePressed = (escNow && !prevEsc) || pad.CheckButton(App::BTN_START, true);
+    prevEsc = escNow;
 }

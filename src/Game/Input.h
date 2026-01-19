@@ -1,5 +1,6 @@
 // Input.h
 #pragma once
+#include "../ContestAPI/app.h"
 
 struct InputState
 {
@@ -17,6 +18,10 @@ struct InputState
     // Debug / test controls (held)
     bool scaleUpHeld = false;    // Right Arrow / RBumper
     bool scaleDownHeld = false;  // Left Arrow / LBumper
+
+    // NEW: Menu / Pause (just-pressed)
+    bool startPressed = false;   // Enter / Start button
+    bool pausePressed = false;   // Esc / Start button
 };
 
 class InputSystem
@@ -25,7 +30,6 @@ public:
     void Update(float dt);
     const InputState& GetState() const { return state; }
 
-    // NEW: enable/disable all input (returns neutral state when disabled)
     void SetEnabled(bool enabled) { inputEnabled = enabled; }
 
 private:
@@ -37,8 +41,12 @@ private:
     // Edge detection for keyboard
     bool prevV = false;
     bool prevSpace = false;
-    bool prevQ = false;
+    bool prevF = false;
     bool prevE = false;
+
+    // NEW edge detection
+    bool prevEnter = false;
+    bool prevEsc = false;
 
 private:
     int FindActivePadIndex() const;
