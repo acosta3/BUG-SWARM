@@ -5,6 +5,25 @@
 #include <cmath>
 #include <cstdio>
 
+
+static void PlayRandomSquish()
+{
+    const int r = std::rand() % 3;
+    
+    switch (r)
+    {
+    case 0:
+        App::PlayAudio("./Data/TestData/squish1.wav", false);
+        break;
+    case 1:
+        App::PlayAudio("./Data/TestData/squish2.wav", false);
+        break;
+    default:
+        App::PlayAudio("./Data/TestData/squish3.wav", false);
+        break;
+    }
+}
+
 void MyGame::Init()
 {
     InitWorld();
@@ -338,6 +357,7 @@ void MyGame::UpdateAttacks(float dtMs)
     {
         const float healPerKill = 1.5f;
         player.Heal(kills * healPerKill);
+		PlayRandomSquish();
     }
 }
 
