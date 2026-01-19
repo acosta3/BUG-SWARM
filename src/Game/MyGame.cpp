@@ -238,25 +238,6 @@ void MyGame::InitObstacles()
             nav.AddObstacleRect(x - half, y - half, x + half, y + half);
         };
 
-    // ========== BOUNDARY WALLS (Sci-Fi Lab Perimeter) ==========
-    // Using BoundaryConfig for the play area walls
-    const float bMin = BoundaryConfig::BOUNDARY_MIN;
-    const float bMax = BoundaryConfig::BOUNDARY_MAX;
-    const float thick = BoundaryConfig::WALL_THICKNESS;
-
-    // Top wall
-    nav.AddObstacleRect(bMin - thick, bMax, bMax + thick, bMax + thick);
-    
-    // Bottom wall
-    nav.AddObstacleRect(bMin - thick, bMin - thick, bMax + thick, bMin);
-    
-    // Left wall
-    nav.AddObstacleRect(bMin - thick, bMin, bMin, bMax);
-    
-    // Right wall
-    nav.AddObstacleRect(bMax, bMin, bMax + thick, bMax);
-
-    // ========== INTERIOR OBSTACLES ==========
     AddBlock(-400.0f, -240.0f);
     AddBlock(-200.0f, -250.0f);
     AddBlock(20.0f, -240.0f);
@@ -579,48 +560,265 @@ void MyGame::RenderWinOverlay() const
 // ------------------------------------------------------------
 // Menu and Pause UI (unchanged - these are UI layout constants)
 // ------------------------------------------------------------
+
 void MyGame::RenderMenu() const
 {
-    App::Print(420, 520, "BUG SWARM");
+    // ========== SCI-FI BACKGROUND ==========
+    static float menuTime = 0.0f;
+    menuTime += 0.016f;
+    if (menuTime > 1000.0f) menuTime = 0.0f;
 
-    App::Print(340, 490, "Start:  Enter   or   Start");
+    // Scanlines
+    for (int y = 0; y < 768; y += 3)
+    {
+        const float intensity = (y % 6 == 0) ? 0.03f : 0.015f;
+        App::DrawLine(0.0f, static_cast<float>(y), 1024.0f, static_cast<float>(y),
+            0.02f + intensity, 0.03f + intensity, 0.05f + intensity);
+    }
 
-    App::Print(340, 450, "Keyboard");
-    App::Print(340, 430, "Move:   W A S D");
-    App::Print(340, 410, "View:   V");
-    App::Print(340, 390, "Pulse:  Space");
-    App::Print(340, 370, "Slash:  F");
-    App::Print(340, 350, "Meteor: E");
-    App::Print(340, 330, "Scale:  Left/Right Arrow");
-    App::Print(340, 310, "Pause:  Esc");
+    // Animated grid
+    const float gridSize = 64.0f;
+    const float pulse = 0.02f + 0.01f * std::sin(menuTime * 0.6f);
 
-    App::Print(580, 450, "Controller");
-    App::Print(580, 430, "Move:   Left Stick");
-    App::Print(580, 410, "View:   DPad Down");
-    App::Print(580, 390, "Pulse:  B");
-    App::Print(580, 370, "Slash:  X");
-    App::Print(580, 350, "Meteor: Y");
-    App::Print(580, 330, "Scale:  LB / RB");
-    App::Print(580, 310, "Pause:  Start");
+    for (float x = 0; x < 1024.0f; x += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    for (float y = 0; y < 768.0f; y += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    // ========== TITLE ==========
+    App::Print(387, 702, "BUG SWARM", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(385, 700, "BUG SWARM", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(280, 670, "TACTICAL ERADICATION PROTOCOL", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== MAP PREVIEW ==========
+    const float mapX = 80.0f;
+    const float mapY = 380.0f;
+    const float mapW = 240.0f;
+    const float mapH = 240.0f;
+    const float worldSize = 2600.0f;
+    const float scale = mapW / worldSize;
+
+    App::Print(80, 635, "TACTICAL MAP", 0.70f, 0.90f, 1.00f);
+
+    // Map borders
+    App::DrawLine(mapX - 2, mapY - 2, mapX + mapW + 2, mapY - 2, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(mapX + mapW + 2, mapY - 2, mapX + mapW + 2, mapY + mapH + 2, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(mapX + mapW + 2, mapY + mapH + 2, mapX - 2, mapY + mapH + 2, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(mapX - 2, mapY + mapH + 2, mapX - 2, mapY - 2, 0.70f, 0.90f, 1.00f);
+
+    App::DrawLine(mapX, mapY, mapX + mapW, mapY, 1.0f, 0.95f, 0.20f);
+    App::DrawLine(mapX + mapW, mapY, mapX + mapW, mapY + mapH, 1.0f, 0.95f, 0.20f);
+    App::DrawLine(mapX + mapW, mapY + mapH, mapX, mapY + mapH, 1.0f, 0.95f, 0.20f);
+    App::DrawLine(mapX, mapY + mapH, mapX, mapY, 1.0f, 0.95f, 0.20f);
+
+    // Draw walls and hives
+    const float bMin = BoundaryConfig::BOUNDARY_MIN;
+    const float bMax = BoundaryConfig::BOUNDARY_MAX;
+    const float centerX = mapX + mapW * 0.5f;
+    const float centerY = mapY + mapH * 0.5f;
+
+    auto WorldToMap = [&](float wx, float wy, float& mx, float& my)
+        {
+            mx = centerX + wx * scale;
+            my = centerY + wy * scale;
+        };
+
+    float x1, y1, x2, y2;
+    WorldToMap(bMin, bMin, x1, y1);
+    WorldToMap(bMax, bMax, x2, y2);
+
+    const float wallAlpha = 0.3f;
+    App::DrawLine(x1, y1, x2, y1, 0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
+    App::DrawLine(x1, y2, x2, y2, 0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
+    App::DrawLine(x1, y1, x1, y2, 0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
+    App::DrawLine(x2, y1, x2, y2, 0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
+
+    const auto& hiveList = hives.GetHives();
+    const float hivePulse = std::sin(menuTime * 3.0f) * 0.3f + 0.7f;
+
+    for (const auto& h : hiveList)
+    {
+        float mx, my;
+        WorldToMap(h.x, h.y, mx, my);
+        const float r = h.radius * scale;
+        const int segments = 16;
+
+        float prevX = mx + (r + 3) * hivePulse;
+        float prevY = my;
+
+        for (int i = 1; i <= segments; i++)
+        {
+            const float angle = (GameConfig::HiveConfig::TWO_PI * i) / segments;
+            const float x = mx + std::cos(angle) * (r + 3) * hivePulse;
+            const float y = my + std::sin(angle) * (r + 3) * hivePulse;
+            App::DrawLine(prevX, prevY, x, y, 1.0f * hivePulse, 0.85f * hivePulse, 0.10f * hivePulse);
+            prevX = x;
+            prevY = y;
+        }
+
+        prevX = mx + r;
+        prevY = my;
+
+        for (int i = 1; i <= segments; i++)
+        {
+            const float angle = (GameConfig::HiveConfig::TWO_PI * i) / segments;
+            const float x = mx + std::cos(angle) * r;
+            const float y = my + std::sin(angle) * r;
+            App::DrawLine(prevX, prevY, x, y, 1.0f, 0.95f, 0.20f);
+            prevX = x;
+            prevY = y;
+        }
+    }
+
+    App::Print(80, 365, "3 HIVES DETECTED", 1.0f, 0.55f, 0.10f, GLUT_BITMAP_HELVETICA_10);
+
+    // ========== MISSION BRIEFING - BETTER CENTERED ==========
+    const float panelX = 370.0f;
+    const float panelY = 475.0f;
+
+    App::DrawLine(panelX - 5, panelY - 5, panelX + 295, panelY - 5, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 295, panelY - 5, panelX + 295, panelY + 130, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 295, panelY + 130, panelX - 5, panelY + 130, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX - 5, panelY + 130, panelX - 5, panelY - 5, 0.70f, 0.90f, 1.00f);
+
+    App::Print(415, 580, "MISSION OBJECTIVE", 1.0f, 0.55f, 0.10f);
+    App::Print(380, 567, "- Eliminate all hive structures", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(380, 547, "- Survive the swarm", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(380, 527, "- Utilize tactical abilities", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(380, 502, "Enemies: 100,000 bugs", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(435, 482, "STATUS: READY", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== START PROMPT ==========
+    const float blinkAlpha = std::sin(menuTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
+    App::Print(320, 330, ">> PRESS ENTER OR START TO BEGIN <<",
+        blinkAlpha, blinkAlpha * 0.95f, blinkAlpha * 0.20f);
+
+    // ========== CONTROLS ==========
+    App::Print(80, 310, "KEYBOARD CONTROLS", 0.70f, 0.90f, 1.00f);
+    App::Print(80, 285, "Move:   W A S D", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 265, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 245, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 225, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 205, "Scale:  Arrows", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 185, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    App::Print(700, 310, "CONTROLLER", 0.70f, 0.90f, 1.00f);
+    App::Print(700, 285, "Move:   L-Stick", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 265, "Pulse:  B", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 245, "Slash:  X", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 225, "Meteor: Y", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 205, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 185, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    // ========== FOOTER ==========
+    App::Print(260, 30, "CLASSIFIED - AUTHORIZATION LEVEL ALPHA REQUIRED",
+        0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
+    
 }
 
 void MyGame::RenderPauseOverlay() const
 {
-    App::Print(470, 520, "PAUSED");
-    App::Print(330, 490, "Resume:  Enter or Start");
-    App::Print(330, 470, "Pause:   Esc   or Start");
+    // ========== SCI-FI BACKGROUND (SAME AS MENU) ==========
+    static float pauseTime = 0.0f;
+    pauseTime += 0.016f;
+    if (pauseTime > 1000.0f) pauseTime = 0.0f;
 
-    App::Print(340, 430, "Keyboard");
-    App::Print(340, 410, "Move:   W A S D");
-    App::Print(340, 390, "View:   V");
-    App::Print(340, 370, "Pulse:  Space");
-    App::Print(340, 350, "Slash:  F");
-    App::Print(340, 330, "Meteor: E");
+    // Scanlines
+    for (int y = 0; y < 768; y += 3)
+    {
+        const float intensity = (y % 6 == 0) ? 0.03f : 0.015f;
+        App::DrawLine(0.0f, static_cast<float>(y), 1024.0f, static_cast<float>(y),
+            0.02f + intensity, 0.03f + intensity, 0.05f + intensity);
+    }
 
-    App::Print(580, 430, "Controller");
-    App::Print(580, 410, "Move:   Left Stick");
-    App::Print(580, 390, "View:   DPad Down");
-    App::Print(580, 370, "Pulse:  B");
-    App::Print(580, 350, "Slash:  X");
-    App::Print(580, 330, "Meteor: Y");
+    // Animated grid
+    const float gridSize = 64.0f;
+    const float pulse = 0.02f + 0.01f * std::sin(pauseTime * 0.6f);
+
+    for (float x = 0; x < 1024.0f; x += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    for (float y = 0; y < 768.0f; y += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    // ========== TITLE ==========
+    App::Print(437, 702, "PAUSED", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(435, 700, "PAUSED", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(340, 670, "MISSION SUSPENDED", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== MISSION STATUS PANEL (CENTERED) ==========
+    const float panelX = 365.0f;
+    const float panelY = 475.0f;
+
+    App::DrawLine(panelX - 5, panelY - 5, panelX + 295, panelY - 5, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 295, panelY - 5, panelX + 295, panelY + 130, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 295, panelY + 130, panelX - 5, panelY + 130, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX - 5, panelY + 130, panelX - 5, panelY - 5, 0.70f, 0.90f, 1.00f);
+
+    App::Print(420, 580, "MISSION STATUS", 1.0f, 0.55f, 0.10f);
+
+    // Live player stats
+    char hpText[64];
+    snprintf(hpText, sizeof(hpText), "- Agent HP: %d / %d", player.GetHealth(), player.GetMaxHealth());
+    App::Print(375, 557, hpText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    char scaleText[64];
+    snprintf(scaleText, sizeof(scaleText), "- Scale: %.2fx", player.GetScale());
+    App::Print(375, 537, scaleText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    char enemyText[64];
+    snprintf(enemyText, sizeof(enemyText), "- Hostiles: %d active", zombies.AliveCount());
+    App::Print(375, 517, enemyText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // Hive status
+    char hiveText[64];
+    snprintf(hiveText, sizeof(hiveText), "- Hives: %d / %d remaining", hives.AliveCount(), hives.TotalCount());
+    App::Print(375, 497, hiveText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // Blinking resume prompt
+    const float blinkAlpha = std::sin(pauseTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
+    App::Print(427, 482, "STATUS: PAUSED",
+        blinkAlpha * 0.10f, blinkAlpha * 1.00f, blinkAlpha * 0.10f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== RESUME PROMPT ==========
+    App::Print(305, 410, ">> PRESS ESC OR START TO RESUME <<",
+        blinkAlpha, blinkAlpha * 0.95f, blinkAlpha * 0.20f);
+
+    // ========== CONTROLS ==========
+    App::Print(220, 340, "KEYBOARD CONTROLS", 0.70f, 0.90f, 1.00f);
+    App::Print(220, 315, "Move:   W A S D", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 295, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 275, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 255, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 235, "Scale:  Arrows", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 215, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    App::Print(560, 340, "CONTROLLER", 0.70f, 0.90f, 1.00f);
+    App::Print(560, 315, "Move:   L-Stick", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 295, "Pulse:  B", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 275, "Slash:  X", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 255, "Meteor: Y", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 235, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 215, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    // ========== FOOTER ==========
+    App::Print(300, 30, "MISSION PAUSED - AWAITING ORDERS",
+        0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
 }
