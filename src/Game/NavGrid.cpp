@@ -279,6 +279,36 @@ void NavGrid::BuildFlowField(float targetX, float targetY)
         }
     }
 }
+static void DrawWallTile3D(float x0, float y0, float x1, float y1)
+{
+    // Slight shrink so adjacent tiles don't look like one giant slab
+    const float pad = 1.0f;
+    x0 += pad; y0 += pad;
+    x1 -= pad; y1 -= pad;
+
+    // Shadow (down-right)
+    const float sh = 5.0f;
+    DrawFilledQuad(x0 + sh, y0 + sh, x1 + sh, y1 + sh, 0.03f, 0.04f, 0.06f);
+
+    // Base tile fill (darker than your current cyan)
+    DrawFilledQuad(x0, y0, x1, y1, 0.18f, 0.28f, 0.36f);
+
+    // Outer outline (bright)
+    App::DrawLine(x0, y0, x1, y0, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x1, y0, x1, y1, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x1, y1, x0, y1, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x0, y1, x0, y0, 0.70f, 0.90f, 1.00f);
+
+    // Bevel: top/left highlight, bottom/right shadow
+    const float in = 2.0f;
+    App::DrawLine(x0 + in, y0 + in, x1 - in, y0 + in, 0.85f, 0.95f, 1.00f); // top
+    App::DrawLine(x0 + in, y0 + in, x0 + in, y1 - in, 0.80f, 0.92f, 1.00f); // left
+
+    App::DrawLine(x0 + in, y1 - in, x1 - in, y1 - in, 0.06f, 0.10f, 0.14f); // bottom
+    App::DrawLine(x1 - in, y0 + in, x1 - in, y1 - in, 0.06f, 0.10f, 0.14f); // right
+}
+
+
 
 void NavGrid::DebugDrawBlocked(float offX, float offY) const
 {
@@ -323,7 +353,8 @@ void NavGrid::DebugDrawBlocked(float offX, float offY) const
             const float x1 = wx1 - offX;
             const float y1 = wy1 - offY;
 
-            DrawFilledQuad(x0, y0, x1, y1, r, g, b);
+            //DrawFilledQuad(x0, y0, x1, y1, r, g, b);
+            DrawWallTile3D(x0, y0, x1, y1);
         }
     }
 }
