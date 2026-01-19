@@ -9,6 +9,8 @@
 #include "NavGrid.h"
 #include "HiveSystem.h"
 #include "WorldRenderer.h"
+#include "GameConfig.h"
+#include <vector>
 
 class MyGame
 {
@@ -26,14 +28,12 @@ private:
     void ResetRun();              // resets gameplay state (hives/zombies/player/attacks)
     void RenderWinOverlay() const;
 
-
-
     // Init
     void InitWorld();
     void InitObstacles();
     void InitSystems();
 
-    // Update
+    // Update helpers - original methods
     void UpdateInput(float deltaTimeMs);
     void UpdatePlayer(float deltaTimeMs);
     void UpdateAttacks(float deltaTimeMs);
@@ -41,6 +41,11 @@ private:
     void UpdateCamera(float deltaTimeMs, float playerX, float playerY);
     void UpdateZombies(float deltaTimeMs, float playerX, float playerY);
 
+    // Optimized update methods
+    void UpdateAttacksOptimized(float dtMs, float playerX, float playerY);
+    void UpdateNavFlowFieldOptimized(float playerX, float playerY);
+    void UpdateZombiesOptimized(float dtMs, float playerX, float playerY);
+    void SpawnZombiesOptimized(float playerX, float playerY);
 
     AttackInput BuildAttackInput(const InputState& in);
 
@@ -56,7 +61,7 @@ private:
     void RespawnNow();
     bool InputLocked() const;
 
-    // NEW: Menu / Pause game mode
+    // Menu / Pause game mode
     enum class GameMode
     {
         Menu,
@@ -94,10 +99,19 @@ private:
     LifeState life = LifeState::Playing;
     float lifeTimerMs = 0.0f;
 
-    // Tuning knobs
-    float deathPauseMs = 900.0f;
-    float respawnGraceMs = 650.0f;
+    // Tuning knobs (kept for compatibility, but using config values)
+    float deathPauseMs = GameConfig::GameTuning::DEATH_PAUSE_MS;
+    float respawnGraceMs = GameConfig::GameTuning::RESPAWN_GRACE_MS;
 
-    // NEW
+    // Game mode
     GameMode mode = GameMode::Menu;
+
+    // Performance optimization caches
+    mutable std::vector<int> tempCalculationBuffer;
+    mutable AttackInput cachedAttackInput;
+
+    // Cached state for optimization
+    float lastPlayerPosX = 0.0f;
+    float lastPlayerPosY = 0.0f;
+    float lastUpdateTime = 0.0f;
 };

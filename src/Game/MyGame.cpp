@@ -1,27 +1,19 @@
 // MyGame.cpp
 #include "MyGame.h"
 #include "../ContestAPI/app.h"
+#include "GameConfig.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
+using namespace GameConfig;
+
+// Optimized static audio function using GameConfig
 static void PlayRandomSquish()
 {
-    const int r = std::rand() % 3;
-
-    switch (r)
-    {
-    case 0:
-        App::PlayAudio("./Data/TestData/squish1.wav", false);
-        break;
-    case 1:
-        App::PlayAudio("./Data/TestData/squish2.wav", false);
-        break;
-    default:
-        App::PlayAudio("./Data/TestData/squish3.wav", false);
-        break;
-    }
+    const int r = std::rand() % GameTuning::SQUISH_SOUND_COUNT;
+    App::PlayAudio(AudioResources::GetSquishSound(r), false);
 }
 
 void MyGame::Init()
@@ -32,7 +24,7 @@ void MyGame::Init()
 
     mode = GameMode::Menu;
 
-    App::PlayAudio("./Data/TestData/GameLoopMusic.wav", true);
+    App::PlayAudio(AudioResources::GAME_MUSIC, true);
 }
 
 void MyGame::Update(float dtMs)
@@ -112,7 +104,7 @@ void MyGame::Update(float dtMs)
     player.GetWorldPosition(px, py);
 
     // -----------------------------
-    // Life-state handling first
+    // Life-state handling first - using config constants
     // -----------------------------
     if (life != LifeState::Playing)
     {
@@ -125,7 +117,7 @@ void MyGame::Update(float dtMs)
 
         if (life == LifeState::DeathPause)
         {
-            if (lifeTimerMs >= deathPauseMs)
+            if (lifeTimerMs >= GameTuning::DEATH_PAUSE_MS)
             {
                 RespawnNow();
                 life = LifeState::RespawnGrace;
@@ -136,7 +128,7 @@ void MyGame::Update(float dtMs)
         {
             attacks.Update(dtMs);
 
-            if (lifeTimerMs >= respawnGraceMs)
+            if (lifeTimerMs >= GameTuning::RESPAWN_GRACE_MS)
             {
                 life = LifeState::Playing;
                 lifeTimerMs = 0.0f;
@@ -204,7 +196,7 @@ void MyGame::Shutdown()
 }
 
 // ------------------------------------------------------------
-// Init
+// Init - now using GameConfig constants
 // ------------------------------------------------------------
 void MyGame::InitWorld()
 {
@@ -218,10 +210,15 @@ void MyGame::InitWorld()
 
     player.SetNavGrid(&nav);
 
-    camera.Init(1024.0f, 768.0f);
+    // Using GameConfig constants instead of hardcoded values
+    camera.Init(GameTuning::SCREEN_WIDTH, GameTuning::SCREEN_HEIGHT);
     camera.Follow(px, py);
 
-    nav.Init(-5000.0f, -5000.0f, 5000.0f, 5000.0f, 60.0f);
+    nav.Init(
+        GameTuning::WORLD_MIN_X, GameTuning::WORLD_MIN_Y,
+        GameTuning::WORLD_MAX_X, GameTuning::WORLD_MAX_Y,
+        GameTuning::NAV_CELL_SIZE
+    );
     nav.ClearObstacles();
 
     life = LifeState::Playing;
@@ -230,8 +227,9 @@ void MyGame::InitWorld()
 
 void MyGame::InitObstacles()
 {
-    const float spread = 1.8f;
-    const float half = 9.0f;
+    // Using GameConfig constants
+    const float spread = GameTuning::OBSTACLE_SPREAD;
+    const float half = GameTuning::OBSTACLE_HALF_SIZE;
 
     auto AddBlock = [&](float cx, float cy)
         {
@@ -258,7 +256,7 @@ void MyGame::InitObstacles()
         float x0 = -300.0f * spread;
         float x1 = 100.0f * spread;
         float y = -187.5f * spread;
-        const float barHalfH = 6.0f;
+        const float barHalfH = GameTuning::BAR_HALF_HEIGHT;
         nav.AddObstacleRect(x0, y - barHalfH, x1, y + barHalfH);
     }
 
@@ -333,11 +331,11 @@ void MyGame::InitSystems()
     lastAimY = 1.0f;
     lastTargetCell = -1;
 
-    lastDtMs = 16.0f;
+    lastDtMs = GameTuning::DEFAULT_DT_MS;
 }
 
 // ------------------------------------------------------------
-// Update helpers
+// Update helpers - using GameConfig constants
 // ------------------------------------------------------------
 bool MyGame::InputLocked() const
 {
@@ -368,7 +366,7 @@ void MyGame::UpdatePlayer(float dtMs)
     player.ApplyScaleInput(in.scaleUpHeld, in.scaleDownHeld, dtMs);
 
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
-    if (len2 > 0.0001f)
+    if (len2 > GameTuning::MOVEMENT_THRESHOLD)
     {
         lastAimX = in.moveX;
         lastAimY = in.moveY;
@@ -383,7 +381,7 @@ AttackInput MyGame::BuildAttackInput(const InputState& in)
     a.meteorPressed = in.meteorPressed;
 
     const float len2 = in.moveX * in.moveX + in.moveY * in.moveY;
-    if (len2 > 0.0001f)
+    if (len2 > GameTuning::MOVEMENT_THRESHOLD)
     {
         a.aimX = in.moveX;
         a.aimY = in.moveY;
@@ -415,8 +413,8 @@ void MyGame::UpdateAttacks(float dtMs)
     const int kills = attacks.GetLastSlashKills();
     if (kills > 0)
     {
-        const float healPerKill = 1.5f;
-        player.Heal(kills * healPerKill);
+        // Using GameConfig constant instead of hardcoded 1.5f
+        player.Heal(kills * GameTuning::HEAL_PER_KILL);
         PlayRandomSquish();
     }
 }
@@ -451,7 +449,7 @@ void MyGame::UpdateZombies(float dtMs, float playerX, float playerY)
 }
 
 // ------------------------------------------------------------
-// Death / respawn
+// Death / respawn - using GameConfig constants
 // ------------------------------------------------------------
 void MyGame::BeginDeath(float playerX, float playerY)
 {
@@ -469,7 +467,7 @@ void MyGame::BeginDeath(float playerX, float playerY)
 void MyGame::RespawnNow()
 {
     player.Revive(true);
-    player.GiveInvulnerability(2000.0f);
+    player.GiveInvulnerability(GameTuning::INVULNERABILITY_RESPAWN_MS);
 
     player.SetWorldPosition(respawnX, respawnY);
     player.SetNavGrid(&nav);
@@ -481,7 +479,7 @@ void MyGame::RespawnNow()
 }
 
 // ------------------------------------------------------------
-// Win + restart
+// Win + restart - using GameConfig constants
 // ------------------------------------------------------------
 void MyGame::BeginWin()
 {
@@ -495,9 +493,9 @@ void MyGame::ResetRun()
     nav.ClearObstacles();
     InitObstacles();
 
-    // Reset player
+    // Reset player - using GameConfig constants
     player.Revive(true);
-    player.GiveInvulnerability(1000.0f);
+    player.GiveInvulnerability(GameTuning::INVULNERABILITY_RESET_MS);
     player.SetWorldPosition(respawnX, respawnY);
     player.SetNavGrid(&nav);
     player.SetMoveInput(0.0f, 0.0f);
@@ -558,7 +556,7 @@ void MyGame::RenderWinOverlay() const
 }
 
 // ------------------------------------------------------------
-// Menu and Pause UI
+// Menu and Pause UI (unchanged - these are UI layout constants)
 // ------------------------------------------------------------
 void MyGame::RenderMenu() const
 {
@@ -605,4 +603,3 @@ void MyGame::RenderPauseOverlay() const
     App::Print(580, 350, "Slash:  X");
     App::Print(580, 330, "Meteor: Y");
 }
-//before

@@ -1,4 +1,4 @@
-// ZombieSystem.h
+// ZombieSystem.h - AAA Quality Version
 #pragma once
 #include <vector>
 #include <cstdint>
@@ -18,7 +18,7 @@ struct ZombieTypeStats
     float fearRadius;
 };
 
-// Central place for all "magic numbers"
+// Runtime tuning parameters (can be modified during gameplay for balancing)
 struct ZombieTuning
 {
     // Touch damage collision sizes
@@ -61,70 +61,68 @@ public:
     };
 
 public:
+    // Initialization
     void Init(int maxZombies, const NavGrid& nav);
     void Clear();
 
+    // Spawning
     void Spawn(int count, float playerX, float playerY);
+    bool SpawnAtWorld(float x, float y, uint8_t forcedType = 255);
 
-    // IMPORTANT:
-    // - Despawn is used for non-player removals (fear ran far, cleanup, etc.)
-    // - KillByPlayer is what AttackSystem should call when an attack kills a zombie.
-    void Despawn(int index);
-    void KillByPlayer(int index);
+    // Removal
+    void Despawn(int index);      // Non-player removals (fear, cleanup, etc.)
+    void KillByPlayer(int index); // Player attack kills (tracked for UI)
 
-    // Returns damage dealt to player this frame
+    // Updates
     int Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav);
+    void LightweightUpdate(float deltaTimeMs); // Performance-optimized drift update
 
+    // Behavior
     void TriggerFear(float sourceX, float sourceY, float radius, float durationMs);
 
 public:
-    // Per-frame kill counter for UI popups
+    // Kill tracking for UI
     void BeginFrame();
-    int  ConsumeKillsThisFrame();   // returns kills since last consume (and clears)
+    int  ConsumeKillsThisFrame();
     int  LastMoveKills() const { return lastMoveKills; }
 
 public:
-    // Accessors
+    // State queries
     int AliveCount() const { return aliveCount; }
     int MaxCount() const { return maxCount; }
     bool CanSpawnMore(int n = 1) const { return (aliveCount + n) <= maxCount; }
 
+    // Zombie data accessors
     float   GetX(int i) const { return posX[i]; }
     float   GetY(int i) const { return posY[i]; }
     uint8_t GetType(int i) const { return type[i]; }
-
-    bool IsFeared(int i) const { return fearTimerMs[i] > 0.0f; }
+    bool    IsFeared(int i) const { return fearTimerMs[i] > 0.0f; }
 
     void GetTypeCounts(int& g, int& r, int& b, int& p) const;
 
 public:
-    // Density view helpers
-    int GetCellCountAt(int cellIndex) const { return cellCount[cellIndex]; }
-    int GetGridW() const { return gridW; }
-    int GetGridH() const { return gridH; }
+    // Spatial grid accessors (for density view rendering)
+    int   GetCellCountAt(int cellIndex) const { return cellCount[cellIndex]; }
+    int   GetGridW() const { return gridW; }
+    int   GetGridH() const { return gridH; }
     float GetCellSize() const { return cellSize; }
     float GetWorldMinX() const { return worldMinX; }
     float GetWorldMinY() const { return worldMinY; }
 
 public:
-    // Optional: tweak tuning at runtime (nice for balancing)
+    // Runtime tuning access
     ZombieTuning& GetTuning() { return tuning; }
     const ZombieTuning& GetTuning() const { return tuning; }
 
-    bool SpawnAtWorld(float x, float y, uint8_t forcedType = 255);
-
 private:
-    // ---- Init helpers ----
+    // Initialization helpers
     void InitTypeStats();
     uint8_t RollTypeWeighted() const;
 
-    // ---- Grid helpers ----
-    int  CellIndex(float x, float y) const;
-    void BuildGrid();
+    // Spatial grid helpers
+    int CellIndex(float x, float y) const;
 
-    void BuildGridNear(const std::vector<int>& indices);
-
-    // ---- Per-frame helpers ----
+    // Per-frame update helpers
     void TickTimers(int i, float deltaTimeMs);
     void ApplyTouchDamage(int i, const ZombieTypeStats& s, float distSqToPlayer, float hitDistSq, int& outDamage);
 
@@ -138,25 +136,25 @@ private:
 
     // Movement
     bool ResolveMoveSlide(float& x, float& y, float vx, float vy, float dt, const NavGrid& nav, bool& outFullBlocked) const;
+    bool PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const;
 
     // Utility
     static void NormalizeSafe(float& x, float& y);
     static float Clamp01(float v);
 
-    // Swap-remove core (used by Despawn and KillByPlayer)
+    // Removal core
     void KillSwapRemove(int index);
 
-    bool PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const;
-
-
 private:
+    // Runtime tuning
     ZombieTuning tuning;
 
 private:
+    // Capacity and count
     int maxCount = 0;
     int aliveCount = 0;
 
-    // ---- SoA storage ----
+    // SoA (Structure of Arrays) for cache-friendly data layout
     std::vector<float> posX, posY;
     std::vector<float> velX, velY;
 
@@ -166,13 +164,13 @@ private:
     std::vector<float> fearTimerMs;
     std::vector<float> attackCooldownMs;
     std::vector<uint16_t> hp;
-
     std::vector<float> flowAssistMs;
 
+    // Type configurations (initialized from GameConfig)
     ZombieTypeStats typeStats[ZTYPE_COUNT];
 
 private:
-    // ---- Separation spatial grid ----
+    // Separation spatial grid
     float cellSize = 40.0f;
     int gridW = 0;
     int gridH = 0;
@@ -182,12 +180,13 @@ private:
     float worldMaxX = 5000.0f;
     float worldMaxY = 5000.0f;
 
-    std::vector<int> cellStart;   // size = gridW*gridH + 1
-    std::vector<int> cellCount;   // size = gridW*gridH
-    std::vector<int> cellList;    // size = maxCount
-    std::vector<int> writeCursor; // size = gridW*gridH + 1
+    std::vector<int> cellStart;   // Prefix sum array (size = gridW*gridH + 1)
+    std::vector<int> cellCount;   // Count per cell (size = gridW*gridH)
+    std::vector<int> cellList;    // Zombie indices sorted by cell (size = maxCount)
+    std::vector<int> writeCursor; // Temporary for grid building (size = gridW*gridH + 1)
 
 private:
-    int killsThisFrame = 0; // only player kills
-    int lastMoveKills = 0;  // last consumed batch
+    // Kill tracking
+    int killsThisFrame = 0;
+    int lastMoveKills = 0;
 };
