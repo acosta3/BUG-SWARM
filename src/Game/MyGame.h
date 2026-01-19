@@ -15,13 +15,25 @@
 class MyGame
 {
 public:
-    
+
     void Init();
     void Update(float deltaTimeMs);
     void Render();
     void Shutdown();
 
 private:
+    enum class DifficultyLevel
+    {
+        Easy = 0,      // 20,000
+        Medium = 1,    // 50,000
+        Hard = 2,      // 150,000
+        Extreme = 3    // 200,000
+    };
+
+    int GetMaxZombiesForDifficulty() const;
+    const char* GetDifficultyName() const;
+    const char* GetDifficultyDescription() const;
+    void GetDifficultyColor(float& r, float& g, float& b) const;
 
     void BeginWin();
     void ResetRun();              // resets gameplay state (hives/zombies/player/attacks)
@@ -104,6 +116,9 @@ private:
 
     // Game mode
     GameMode mode = GameMode::Menu;
+
+    // Difficulty selection
+    DifficultyLevel selectedDifficulty = DifficultyLevel::Easy;
 
     // Performance optimization caches
     mutable std::vector<int> tempCalculationBuffer;

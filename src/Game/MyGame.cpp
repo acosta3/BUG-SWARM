@@ -16,6 +16,89 @@ static void PlayRandomSquish()
     App::PlayAudio(AudioResources::GetSquishSound(r), false);
 }
 
+int MyGame::GetMaxZombiesForDifficulty() const
+{
+    switch (selectedDifficulty)
+    {
+    case DifficultyLevel::Easy:
+        return SystemCapacity::MAX_ZOMBIES_EASY;
+    case DifficultyLevel::Medium:
+        return SystemCapacity::MAX_ZOMBIES_MEDIUM;
+    case DifficultyLevel::Hard:
+        return SystemCapacity::MAX_ZOMBIES_HARD;
+    case DifficultyLevel::Extreme:
+        return SystemCapacity::MAX_ZOMBIES_EXTREME;
+    default:
+        return SystemCapacity::MAX_ZOMBIES_EASY;
+    }
+}
+
+const char* MyGame::GetDifficultyName() const
+{
+    switch (selectedDifficulty)
+    {
+    case DifficultyLevel::Easy:
+        return "EASY";
+    case DifficultyLevel::Medium:
+        return "MEDIUM";
+    case DifficultyLevel::Hard:
+        return "HARD";
+    case DifficultyLevel::Extreme:
+        return "EXTREME";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+const char* MyGame::GetDifficultyDescription() const
+{
+    switch (selectedDifficulty)
+    {
+    case DifficultyLevel::Easy:
+        return "20,000 Hostiles - Recommended for beginners";
+    case DifficultyLevel::Medium:
+        return "50,000 Hostiles - Balanced challenge";
+    case DifficultyLevel::Hard:
+        return "150,000 Hostiles - Intense combat";
+    case DifficultyLevel::Extreme:
+        return "200,000 Hostiles - Maximum threat level";
+    default:
+        return "Unknown difficulty";
+    }
+}
+
+void MyGame::GetDifficultyColor(float& r, float& g, float& b) const
+{
+    switch (selectedDifficulty)
+    {
+    case DifficultyLevel::Easy:
+        r = 0.10f;
+        g = 1.00f;
+        b = 0.10f;
+        break;
+    case DifficultyLevel::Medium:
+        r = 1.00f;
+        g = 0.95f;
+        b = 0.20f;
+        break;
+    case DifficultyLevel::Hard:
+        r = 1.00f;
+        g = 0.55f;
+        b = 0.10f;
+        break;
+    case DifficultyLevel::Extreme:
+        r = 1.00f;
+        g = 0.15f;
+        b = 0.15f;
+        break;
+    default:
+        r = 1.00f;
+        g = 1.00f;
+        b = 1.00f;
+        break;
+    }
+}
+
 void MyGame::Init()
 {
     InitWorld();
@@ -36,12 +119,34 @@ void MyGame::Update(float dtMs)
 
     const InputState& in = input.GetState();
 
-
     UpdateInput(dtMs);
-
 
     if (mode == GameMode::Menu)
     {
+        // Difficulty selection with arrow keys or D-pad
+        static bool diffUpPressed = false;
+        static bool diffDownPressed = false;
+
+        const bool upNow = in.moveY > 0.5f;
+        const bool downNow = in.moveY < -0.5f;
+
+        if (upNow && !diffUpPressed)
+        {
+            int current = static_cast<int>(selectedDifficulty);
+            current = (current - 1 + 4) % 4;
+            selectedDifficulty = static_cast<DifficultyLevel>(current);
+        }
+
+        if (downNow && !diffDownPressed)
+        {
+            int current = static_cast<int>(selectedDifficulty);
+            current = (current + 1) % 4;
+            selectedDifficulty = static_cast<DifficultyLevel>(current);
+        }
+
+        diffUpPressed = upNow;
+        diffDownPressed = downNow;
+
         if (in.startPressed)
         {
             // Fresh run when leaving menu
@@ -219,7 +324,7 @@ void MyGame::InitObstacles()
         };
 
 
-    
+
     const float bMin = BoundaryConfig::BOUNDARY_MIN;
     const float bMax = BoundaryConfig::BOUNDARY_MAX;
     const float thick = BoundaryConfig::WALL_THICKNESS;
@@ -295,9 +400,10 @@ void MyGame::InitSystems()
     player.GetWorldPosition(px, py);
 
     hives.Init();
-    zombies.Init(GameConfig::SystemCapacity::MAX_ZOMBIES, nav);
 
-    const int totalToSpawn = GameConfig::SystemCapacity::MAX_ZOMBIES;
+    const int totalToSpawn = GetMaxZombiesForDifficulty();
+    zombies.Init(totalToSpawn, nav);
+
     const auto& hiveList = hives.GetHives();
 
     int aliveCount = 0;
@@ -495,13 +601,13 @@ void MyGame::ResetRun()
     // Reset camera
     camera.Follow(respawnX, respawnY);
 
-    // Reset systems
+    // Reset systems with selected difficulty
     hives.Init();
-    zombies.Init(GameConfig::SystemCapacity::MAX_ZOMBIES, nav);
+    const int totalToSpawn = GetMaxZombiesForDifficulty();
+    zombies.Init(totalToSpawn, nav);
 
     // Spawn zombies distributed across alive hives
     {
-        const int totalToSpawn = GameConfig::SystemCapacity::MAX_ZOMBIES;
         const auto& hiveList = hives.GetHives();
 
         int aliveCount = 0;
@@ -542,117 +648,177 @@ void MyGame::ResetRun()
 
 void MyGame::RenderWinOverlay() const
 {
-    
     static float winTime = 0.0f;
     winTime += 0.016f;
     if (winTime > 1000.0f) winTime = 0.0f;
 
-    // Scanlines
-    for (int y = 0; y < 768; y += 3)
+    // Semi-transparent dark overlay
+    for (int y = 0; y < 768; y += 2)
     {
-        const float intensity = (y % 6 == 0) ? 0.03f : 0.015f;
+        const float alpha = 0.05f + 0.02f * std::sin(winTime * 0.3f + y * 0.01f);
         App::DrawLine(0.0f, static_cast<float>(y), 1024.0f, static_cast<float>(y),
-            0.02f + intensity, 0.03f + intensity, 0.05f + intensity);
+            alpha, alpha * 0.8f, alpha * 1.2f);
     }
 
-    // Animated grid
-    const float gridSize = 64.0f;
-    const float pulse = 0.02f + 0.01f * std::sin(winTime * 0.6f);
+    // Animated grid background
+    const float gridSize = 80.0f;
+    const float gridPulse = 0.03f + 0.02f * std::sin(winTime * 0.5f);
 
     for (float x = 0.0f; x < 1024.0f; x += gridSize)
     {
-        const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
-        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
-        App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
+        const bool isMajor = (static_cast<int>(x / gridSize) % 3 == 0);
+        const float alpha = isMajor ? (0.12f + gridPulse) : 0.06f;
+        App::DrawLine(x, 100.0f, x, 668.0f, alpha, alpha * 1.1f, alpha * 1.3f);
     }
 
-    for (float y = 0.0f; y < 768.0f; y += gridSize)
+    for (float y = 100.0f; y < 668.0f; y += gridSize)
     {
-        const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
-        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
-        App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
+        const bool isMajor = (static_cast<int>(y / gridSize) % 3 == 0);
+        const float alpha = isMajor ? (0.12f + gridPulse) : 0.06f;
+        App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha * 1.1f, alpha * 1.3f);
     }
 
-    const float blinkAlpha = std::sin(winTime * 2.0f) * 0.3f + 0.7f;
-    
+    // Main title with enhanced glow effect
+    const float titlePulse = 0.7f + 0.3f * std::sin(winTime * 1.5f);
+
+    // Outer glow layers
+    for (int offset = 8; offset > 0; offset -= 2)
+    {
+        const float glowAlpha = (1.0f - offset / 8.0f) * 0.15f * titlePulse;
+        App::Print(312 - offset, 552 - offset, "MISSION COMPLETE",
+            0.1f * glowAlpha, 1.0f * glowAlpha, 0.1f * glowAlpha, GLUT_BITMAP_TIMES_ROMAN_24);
+        App::Print(312 + offset, 552 + offset, "MISSION COMPLETE",
+            0.1f * glowAlpha, 1.0f * glowAlpha, 0.1f * glowAlpha, GLUT_BITMAP_TIMES_ROMAN_24);
+    }
+
     // Shadow
-    App::Print(352, 552, "MISSION COMPLETE", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
-    // Glow
-    App::Print(350, 550, "MISSION COMPLETE", 
-        0.1f * blinkAlpha, 1.0f * blinkAlpha, 0.1f * blinkAlpha, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(314, 554, "MISSION COMPLETE", 0.0f, 0.0f, 0.0f, GLUT_BITMAP_TIMES_ROMAN_24);
 
-    const float panelX = 312.0f;
-    const float panelY = 400.0f;
+    // Main text with animated color
+    const float colorShift = std::sin(winTime * 2.0f) * 0.15f;
+    App::Print(312, 552, "MISSION COMPLETE",
+        0.1f + colorShift, 1.0f, 0.1f + colorShift * 0.5f, GLUT_BITMAP_TIMES_ROMAN_24);
 
-    // Panel border (cyan glow)
-    App::DrawLine(panelX - 5, panelY - 5, panelX + 400, panelY - 5, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX + 400, panelY - 5, panelX + 400, panelY + 120, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX + 400, panelY + 120, panelX - 5, panelY + 120, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX - 5, panelY + 120, panelX - 5, panelY - 5, 0.70f, 0.90f, 1.00f);
+    // Decorative corner brackets
+    const float bracketAlpha = 0.7f + 0.3f * std::sin(winTime * 3.0f);
+    const float bracketSize = 30.0f;
+
+    // Top-left corner
+    App::DrawLine(280, 520, 280 + bracketSize, 520, bracketAlpha, bracketAlpha * 0.95f, 0.2f * bracketAlpha);
+    App::DrawLine(280, 520, 280, 520 + bracketSize, bracketAlpha, bracketAlpha * 0.95f, 0.2f * bracketAlpha);
+
+    // Top-right corner
+    App::DrawLine(744 - bracketSize, 520, 744, 520, bracketAlpha, bracketAlpha * 0.95f, 0.2f * bracketAlpha);
+    App::DrawLine(744, 520, 744, 520 + bracketSize, bracketAlpha, bracketAlpha * 0.95f, 0.2f * bracketAlpha);
+
+    // Mission summary panel with glowing border
+    const float panelX = 262.0f;
+    const float panelY = 360.0f;
+    const float panelW = 500.0f;
+    const float panelH = 140.0f;
+
+    // Panel glow
+    const float borderGlow = 0.5f + 0.5f * std::sin(winTime * 2.5f);
+    for (int i = 0; i < 3; i++)
+    {
+        const float offset = static_cast<float>(i) * 2.0f;
+        const float glowAlpha = (1.0f - i / 3.0f) * 0.3f * borderGlow;
+        App::DrawLine(panelX - offset, panelY - offset, panelX + panelW + offset, panelY - offset,
+            0.3f * glowAlpha, 0.7f * glowAlpha, 1.0f * glowAlpha);
+        App::DrawLine(panelX + panelW + offset, panelY - offset, panelX + panelW + offset, panelY + panelH + offset,
+            0.3f * glowAlpha, 0.7f * glowAlpha, 1.0f * glowAlpha);
+        App::DrawLine(panelX + panelW + offset, panelY + panelH + offset, panelX - offset, panelY + panelH + offset,
+            0.3f * glowAlpha, 0.7f * glowAlpha, 1.0f * glowAlpha);
+        App::DrawLine(panelX - offset, panelY + panelH + offset, panelX - offset, panelY - offset,
+            0.3f * glowAlpha, 0.7f * glowAlpha, 1.0f * glowAlpha);
+    }
 
     // Panel header
-    App::Print(420, 505, "MISSION SUMMARY", 1.0f, 0.55f, 0.10f);
+    App::Print(420, 485, "MISSION SUMMARY", 1.0f, 0.65f, 0.15f);
 
-    // Victory stats
-    App::Print(327, 475, "STATUS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(400, 475, "ALL HIVES DESTROYED", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+    // Victory stats with icons
+    App::Print(277, 455, "[STATUS]", 0.3f, 0.7f, 0.9f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(350, 455, "ALL HIVES DESTROYED", 0.15f, 1.0f, 0.15f, GLUT_BITMAP_HELVETICA_12);
 
     char finalHP[64];
-    snprintf(finalHP, sizeof(finalHP), "FINAL HP: %d / %d", player.GetHealth(), player.GetMaxHealth());
-    App::Print(327, 455, finalHP, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    snprintf(finalHP, sizeof(finalHP), "[AGENT]  HP: %d / %d", player.GetHealth(), player.GetMaxHealth());
+    App::Print(277, 435, finalHP, 0.3f, 0.7f, 0.9f, GLUT_BITMAP_HELVETICA_12);
 
     char enemiesText[64];
-    snprintf(enemiesText, sizeof(enemiesText), "HOSTILES ELIMINATED: %d", 
-        GameConfig::SystemCapacity::MAX_ZOMBIES - zombies.AliveCount());
-    App::Print(327, 435, enemiesText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    const int maxZombies = GetMaxZombiesForDifficulty();
+    snprintf(enemiesText, sizeof(enemiesText), "[KILLS]  HOSTILES: %d",
+        maxZombies - zombies.AliveCount());
+    App::Print(277, 415, enemiesText, 0.3f, 0.7f, 0.9f, GLUT_BITMAP_HELVETICA_12);
 
-    App::Print(370, 410, "THREAT NEUTRALIZED", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+    // Threat status with pulsing effect
+    const float threatPulse = 0.8f + 0.2f * std::sin(winTime * 4.0f);
+    App::Print(320, 385, ">> THREAT NEUTRALIZED <<",
+        0.15f * threatPulse, 1.0f * threatPulse, 0.15f * threatPulse, GLUT_BITMAP_HELVETICA_12);
 
+    // Congratulations panel
+    const float congratsX = 212.0f;
+    const float congratsY = 240.0f;
+    const float congratsW = 600.0f;
+    const float congratsH = 90.0f;
 
-    const float congratsX = 262.0f;
-    const float congratsY = 300.0f;
+    // Animated border
+    const float congratsBorderPulse = 0.6f + 0.4f * std::sin(winTime * 2.0f);
+    App::DrawLine(congratsX - 3, congratsY - 3, congratsX + congratsW + 3, congratsY - 3,
+        0.15f * congratsBorderPulse, 1.0f * congratsBorderPulse, 0.15f * congratsBorderPulse);
+    App::DrawLine(congratsX + congratsW + 3, congratsY - 3, congratsX + congratsW + 3, congratsY + congratsH + 3,
+        0.15f * congratsBorderPulse, 1.0f * congratsBorderPulse, 0.15f * congratsBorderPulse);
+    App::DrawLine(congratsX + congratsW + 3, congratsY + congratsH + 3, congratsX - 3, congratsY + congratsH + 3,
+        0.15f * congratsBorderPulse, 1.0f * congratsBorderPulse, 0.15f * congratsBorderPulse);
+    App::DrawLine(congratsX - 3, congratsY + congratsH + 3, congratsX - 3, congratsY - 3,
+        0.15f * congratsBorderPulse, 1.0f * congratsBorderPulse, 0.15f * congratsBorderPulse);
 
-    // Border
-    App::DrawLine(congratsX - 5, congratsY - 5, congratsX + 500, congratsY - 5, 0.10f, 1.00f, 0.10f);
-    App::DrawLine(congratsX + 500, congratsY - 5, congratsX + 500, congratsY + 70, 0.10f, 1.00f, 0.10f);
-    App::DrawLine(congratsX + 500, congratsY + 70, congratsX - 5, congratsY + 70, 0.10f, 1.00f, 0.10f);
-    App::DrawLine(congratsX - 5, congratsY + 70, congratsX - 5, congratsY - 5, 0.10f, 1.00f, 0.10f);
+    // Main congratulations text
+    App::Print(332, 315, "EXCELLENT WORK, AGENT!", 1.0f, 0.98f, 0.3f);
+    App::Print(245, 285, "The swarm has been eradicated successfully", 0.7f, 0.9f, 1.0f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(265, 265, "All hive structures have been neutralized", 0.7f, 0.9f, 1.0f, GLUT_BITMAP_HELVETICA_12);
 
-    App::Print(370, 355, "EXCELLENT WORK, AGENT!", 1.0f, 0.95f, 0.20f);
-    App::Print(280, 330, "The swarm has been eradicated successfully", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(305, 310, "All hive structures have been neutralized", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    // Continue prompt with blinking
+    const float promptBlink = std::sin(winTime * 5.0f) > 0.0f ? 1.0f : 0.4f;
+    App::Print(240, 200, ">> PRESS ENTER OR START TO CONTINUE <<",
+        promptBlink, promptBlink * 0.97f, promptBlink * 0.3f);
 
-
-    const float returnBlinkAlpha = std::sin(winTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
-    App::Print(280, 250, ">> PRESS ENTER OR START TO CONTINUE <<",
-        returnBlinkAlpha, returnBlinkAlpha * 0.95f, returnBlinkAlpha * 0.20f);
-
-    
-    // Victory stars/sparkles
-    for (int i = 0; i < 8; i++)
+    // Animated victory particles
+    for (int i = 0; i < 12; i++)
     {
-        const float sparkleTime = winTime + i * 0.5f;
-        const float sparkleAlpha = std::sin(sparkleTime * 3.0f) * 0.5f + 0.5f;
-        const float sparkleX = 200.0f + i * 80.0f;
-        const float sparkleY = 600.0f + std::sin(sparkleTime * 2.0f) * 20.0f;
-        
-        // Draw small cross/star
-        App::DrawLine(sparkleX - 3, sparkleY, sparkleX + 3, sparkleY, 
-            1.0f * sparkleAlpha, 0.95f * sparkleAlpha, 0.20f * sparkleAlpha);
-        App::DrawLine(sparkleX, sparkleY - 3, sparkleX, sparkleY + 3, 
-            1.0f * sparkleAlpha, 0.95f * sparkleAlpha, 0.20f * sparkleAlpha);
+        const float particleTime = winTime + i * 0.3f;
+        const float particleAlpha = (std::sin(particleTime * 2.5f) + 1.0f) * 0.5f;
+        const float particleX = 150.0f + i * 70.0f + std::sin(particleTime * 1.5f) * 15.0f;
+        const float particleY = 560.0f + std::sin(particleTime * 2.0f + i) * 25.0f;
+        const float size = 2.0f + particleAlpha * 2.0f;
+
+        // Star shape
+        App::DrawLine(particleX - size, particleY, particleX + size, particleY,
+            1.0f * particleAlpha, 0.98f * particleAlpha, 0.3f * particleAlpha);
+        App::DrawLine(particleX, particleY - size, particleX, particleY + size,
+            1.0f * particleAlpha, 0.98f * particleAlpha, 0.3f * particleAlpha);
+        App::DrawLine(particleX - size * 0.7f, particleY - size * 0.7f, particleX + size * 0.7f, particleY + size * 0.7f,
+            1.0f * particleAlpha, 0.98f * particleAlpha, 0.3f * particleAlpha);
+        App::DrawLine(particleX + size * 0.7f, particleY - size * 0.7f, particleX - size * 0.7f, particleY + size * 0.7f,
+            1.0f * particleAlpha, 0.98f * particleAlpha, 0.3f * particleAlpha);
     }
 
-  
-    App::Print(280, 30, "MISSION ACCOMPLISHED - RETURNING TO BASE",
-        0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
-}
+    // Bottom status bar
+    const float statusBarAlpha = 0.3f + 0.1f * std::sin(winTime * 1.0f);
+    App::Print(230, 40, "MISSION ACCOMPLISHED - AUTHORIZATION: ALPHA CLEARANCE",
+        statusBarAlpha, statusBarAlpha * 0.9f, statusBarAlpha * 0.5f, GLUT_BITMAP_HELVETICA_10);
 
-// UI Rendering
+    // Scan lines for extra tech feel
+    for (int i = 0; i < 5; i++)
+    {
+        const float scanY = 100.0f + std::fmod(winTime * 80.0f + i * 120.0f, 568.0f);
+        const float scanAlpha = 0.08f;
+        App::DrawLine(0.0f, scanY, 1024.0f, scanY, scanAlpha, scanAlpha * 1.2f, scanAlpha * 1.5f);
+    }
+}
 
 void MyGame::RenderMenu() const
 {
-   
+
     static float menuTime = 0.0f;
     menuTime += 0.016f;
     if (menuTime > 1000.0f) menuTime = 0.0f;
@@ -669,21 +835,21 @@ void MyGame::RenderMenu() const
     const float gridSize = 64.0f;
     const float pulse = 0.02f + 0.01f * std::sin(menuTime * 0.6f);
 
-    for (float x = 0; x < 1024.0f; x += gridSize)
+    for (float x = 0.0f; x < 1024.0f; x += gridSize)
     {
         const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
         const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
         App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    for (float y = 0; y < 768.0f; y += gridSize)
+    for (float y = 0.0f; y < 768.0f; y += gridSize)
     {
         const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
         const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
         App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-   
+
     App::Print(387, 702, "BUG SWARM", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(385, 700, "BUG SWARM", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(280, 670, "TACTICAL ERADICATION PROTOCOL", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
@@ -770,48 +936,117 @@ void MyGame::RenderMenu() const
 
     App::Print(80, 365, "3 HIVES DETECTED", 1.0f, 0.55f, 0.10f, GLUT_BITMAP_HELVETICA_10);
 
-  
-    const float panelX = 370.0f;
-    const float panelY = 475.0f;
+    // ========== DIFFICULTY SELECTION PANEL ==========
+    const float diffPanelX = 270.0f;
+    const float diffPanelY = 440.0f;
+    const float diffPanelW = 80.0f;
 
-    App::DrawLine(panelX - 5, panelY - 5, panelX + 295, panelY - 5, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX + 295, panelY - 5, panelX + 295, panelY + 130, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX + 295, panelY + 130, panelX - 5, panelY + 130, 0.70f, 0.90f, 1.00f);
-    App::DrawLine(panelX - 5, panelY + 130, panelX - 5, panelY - 5, 0.70f, 0.90f, 1.00f);
+    App::Print(380, 620, "SELECT DIFFICULTY", 0.70f, 0.90f, 1.00f);
+    App::Print(380, 600, "Use UP/DOWN or D-Pad", 0.50f, 0.60f, 0.70f, GLUT_BITMAP_HELVETICA_10);
 
-    App::Print(415, 580, "MISSION OBJECTIVE", 1.0f, 0.55f, 0.10f);
-    App::Print(380, 567, "- Eliminate all hive structures", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(380, 547, "- Survive the swarm", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(380, 527, "- Utilize tactical abilities", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(380, 502, "Enemies: 100,000 bugs", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
-    App::Print(435, 482, "STATUS: READY", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+    // Difficulty options with selection indicator
+    const float optionY = 570.0f;
+    const float optionSpacing = 20.0f;
+
+    for (int i = 0; i < 4; i++)
+    {
+        const DifficultyLevel level = static_cast<DifficultyLevel>(i);
+        const bool isSelected = (level == selectedDifficulty);
+        const float yPos = optionY - i * optionSpacing;
+
+        // Selection indicator
+        if (isSelected)
+        {
+            const float indicatorPulse = 0.7f + 0.3f * std::sin(menuTime * 5.0f);
+            App::Print(375, yPos, ">>",
+                1.0f * indicatorPulse, 0.95f * indicatorPulse, 0.20f * indicatorPulse);
+        }
+
+        // Difficulty name and description
+        float r, g, b;
+        const char* name = "";
+        const char* desc = "";
+
+        switch (level)
+        {
+        case DifficultyLevel::Easy:
+            r = 0.10f; g = 1.00f; b = 0.10f;
+            name = "EASY";
+            desc = "20,000 Hostiles";
+            break;
+        case DifficultyLevel::Medium:
+            r = 1.00f; g = 0.95f; b = 0.20f;
+            name = "MEDIUM";
+            desc = "50,000 Hostiles";
+            break;
+        case DifficultyLevel::Hard:
+            r = 1.00f; g = 0.55f; b = 0.10f;
+            name = "HARD";
+            desc = "150,000 Hostiles";
+            break;
+        case DifficultyLevel::Extreme:
+            r = 1.00f; g = 0.15f; b = 0.15f;
+            name = "EXTREME";
+            desc = "200,000 Hostiles";
+            break;
+        }
+
+        const float alpha = isSelected ? 1.0f : 0.5f;
+        App::Print(400, yPos, name, r * alpha, g * alpha, b * alpha);
+        App::Print(505, yPos, desc, 0.60f * alpha, 0.70f * alpha, 0.80f * alpha, GLUT_BITMAP_HELVETICA_10);
+    }
+
+    // ========== MISSION OBJECTIVE PANEL ==========
+    
+
+    App::Print(415, 295, "MISSION OBJECTIVE", 1.0f, 0.55f, 0.10f);
+    App::Print(380, 272, "- Eliminate all hive structures", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(380, 242, "- Survive the swarm", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(380, 212, "- Utilize tactical abilities", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // Display selected difficulty's enemy count
+    char enemyCountText[64];
+    snprintf(enemyCountText, sizeof(enemyCountText), "Enemies: %d bugs", GetMaxZombiesForDifficulty());
+
+    float diffR, diffG, diffB;
+    GetDifficultyColor(diffR, diffG, diffB);
+    App::Print(435, 380, enemyCountText, diffR, diffG, diffB, GLUT_BITMAP_HELVETICA_12);
+
+    App::Print(435, 347, "STATUS: READY", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
 
 
     const float blinkAlpha = std::sin(menuTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
-    App::Print(320, 330, ">> PRESS ENTER OR START TO BEGIN <<",
+    App::Print(320, 130, ">> PRESS ENTER OR START TO BEGIN <<",
         blinkAlpha, blinkAlpha * 0.95f, blinkAlpha * 0.20f);
 
-    
+
     App::Print(80, 310, "KEYBOARD CONTROLS", 0.70f, 0.90f, 1.00f);
     App::Print(80, 285, "Move:   W A S D", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 265, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 245, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 225, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(80, 205, "Scale:  Arrows", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(80, 185, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 205, "Scale:  Hold Left = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 190, "        Hold Right = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 170, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    // Scale mechanics explanation
+    App::Print(80, 140, "SCALE MECHANICS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 120, "Small: +Speed -Health -Damage", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 105, "Large: -Speed +Health +Damage", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
 
     App::Print(700, 310, "CONTROLLER", 0.70f, 0.90f, 1.00f);
     App::Print(700, 285, "Move:   L-Stick", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(700, 265, "Pulse:  B", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(700, 245, "Slash:  X", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(700, 225, "Meteor: Y", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(700, 205, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(700, 185, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 205, "Scale:  Hold LB = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 190, "        Hold RB = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(700, 170, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
 
-    
+
     App::Print(260, 30, "CLASSIFIED - AUTHORIZATION LEVEL ALPHA REQUIRED",
         0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
-    
+
 }
 
 void MyGame::RenderPauseOverlay() const
@@ -833,21 +1068,21 @@ void MyGame::RenderPauseOverlay() const
     const float gridSize = 64.0f;
     const float pulse = 0.02f + 0.01f * std::sin(pauseTime * 0.6f);
 
-    for (float x = 0; x < 1024.0f; x += gridSize)
+    for (float x = 0.0f; x < 1024.0f; x += gridSize)
     {
         const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
         const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
         App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    for (float y = 0; y < 768.0f; y += gridSize)
+    for (float y = 0.0f; y < 768.0f; y += gridSize)
     {
         const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
         const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
         App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    
+
     App::Print(437, 702, "PAUSED", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(435, 700, "PAUSED", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(340, 670, "MISSION SUSPENDED", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
@@ -894,16 +1129,23 @@ void MyGame::RenderPauseOverlay() const
     App::Print(220, 295, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 275, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 255, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(220, 235, "Scale:  Arrows", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(220, 215, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 235, "Scale:  Left = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 220, "        Right = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 200, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+
+    // Scale mechanics explanation
+    App::Print(220, 170, "SCALE MECHANICS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 150, "Small: +Speed -Health -Damage", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 135, "Large: -Speed +Health +Damage", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
 
     App::Print(560, 340, "CONTROLLER", 0.70f, 0.90f, 1.00f);
     App::Print(560, 315, "Move:   L-Stick", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(560, 295, "Pulse:  B", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(560, 275, "Slash:  X", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(560, 255, "Meteor: Y", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(560, 235, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(560, 215, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 235, "Scale:  LB = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 220, "        RB = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(560, 200, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
 
 
     App::Print(300, 30, "MISSION PAUSED - AWAITING ORDERS",

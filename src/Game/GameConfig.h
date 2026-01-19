@@ -14,7 +14,11 @@ namespace GameConfig
     
     struct SystemCapacity
     {
-        static constexpr int MAX_ZOMBIES = 100'000;  // Reduced from 200'000 for demo
+        static constexpr int MAX_ZOMBIES_EASY = 20'000;      // Default/Easy
+        static constexpr int MAX_ZOMBIES_MEDIUM = 50'000;    // Medium challenge
+        static constexpr int MAX_ZOMBIES_HARD = 150'000;     // Hard challenge
+        static constexpr int MAX_ZOMBIES_EXTREME = 200'000;  // Extreme challenge
+        
         static constexpr int MAX_HIVES = 10;
         static constexpr int MAX_OBSTACLES = 1000;
     };

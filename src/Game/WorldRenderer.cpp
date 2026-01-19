@@ -75,7 +75,17 @@ static void DrawVignette()
 
 static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
 {
-    // Scan lines (screen-space)
+    
+    // Fill entire screen with solid dark background color
+    for (int y = 0; y < (int)GameConfig::RenderConfig::SCREEN_H; y++)
+    {
+        App::DrawLine(0.0f, (float)y, GameConfig::RenderConfig::SCREEN_W, (float)y,
+            GameConfig::RenderConfig::BG_BASE_R,
+            GameConfig::RenderConfig::BG_BASE_G,
+            GameConfig::RenderConfig::BG_BASE_B);
+    }
+
+    // Scan lines (screen-space) - these are now drawn ON TOP of the solid fill
     for (int y = 0; y < (int)GameConfig::RenderConfig::SCREEN_H; y += GameConfig::RenderConfig::BG_SCANLINE_STEP)
     {
         const float t = (y % GameConfig::RenderConfig::BG_SCANLINE_MOD == 0)
@@ -214,12 +224,14 @@ void WorldRenderer::RenderWorld(
     float dtMs,
     bool densityView)
 {
-    DrawVignette();
-
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
+    // Draw background FIRST with solid fill
     DrawSciFiLabBackground(dtMs, offX, offY);
+    
+    // Then draw vignette ON TOP
+    //DrawVignette();
 
     const float playerScreenX = px - offX;
     const float playerScreenY = py - offY;
@@ -230,7 +242,7 @@ void WorldRenderer::RenderWorld(
 
     player.Render(offX, offY);
     attacks.RenderFX(offX, offY);
-
+    
     RenderKillPopupOverPlayer(playerScreenX, playerScreenY, dtMs);
 
     const int simCount = zombies.AliveCount();
@@ -420,7 +432,7 @@ void WorldRenderer::RenderUI(
     const float y = GameConfig::RenderConfig::UI_HUD_Y;
 
     char bufZ[128];
-    std::snprintf(bufZ, sizeof(bufZ), "Zombies: %d/%d  Draw: %d  Step: %d", simCount, maxCount, drawnCount, step);
+    std::snprintf(bufZ, sizeof(bufZ), "BUGS: %d/%d", simCount, maxCount);
     App::Print((int)x, (int)(y - 18.0f), bufZ);
 
     char bufHP[64];
@@ -470,7 +482,7 @@ void WorldRenderer::RenderUI(
         GameConfig::RenderConfig::METEOR_CD_R, GameConfig::RenderConfig::METEOR_CD_G, GameConfig::RenderConfig::METEOR_CD_B);
 
     char bufH[128];
-    std::snprintf(bufH, sizeof(bufH), "Nests: %d/%d alive", hivesAlive, hivesTotal);
+    std::snprintf(bufH, sizeof(bufH), "Hives: %d/%d alive", hivesAlive, hivesTotal);
     App::Print(440, 700, bufH);
 }
 
