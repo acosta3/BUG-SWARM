@@ -24,6 +24,117 @@ static constexpr int kMaxDraw = 10000;
 
 static constexpr float kPi = 3.14159265358979323846f;
 
+
+static float Clamp01f(float v)
+{
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+static float WrapMod(float v, float m)
+{
+    float r = std::fmod(v, m);
+    if (r < 0.0f) r += m;
+    return r;
+}
+
+static void DrawSciFiLabBackground(float animTimeSec, float offX, float offY)
+{
+    // Base floor tint (not pure black)
+    const float baseR = 0.02f;
+    const float baseG = 0.03f;
+    const float baseB = 0.05f;
+
+    // Scan lines (screen-space is fine, keeps the look crisp)
+    for (int y = 0; y < 768; y += 2)
+    {
+        const float t = (y % 8 == 0) ? 0.014f : 0.008f;
+        App::DrawLine(0.0f, (float)y, 1024.0f, (float)y, baseR + t, baseG + t, baseB + t);
+    }
+
+    const float screenW = 1024.0f;
+    const float screenH = 768.0f;
+
+    const float grid = 64.0f;
+    const float majorPulse = 0.02f + 0.01f * std::sinf(animTimeSec * 0.6f);
+
+    // World-anchoring: shift pattern by camera offset
+    const float ox = -WrapMod(offX, grid);
+    const float oy = -WrapMod(offY, grid);
+
+    auto DrawThickV = [&](float x, float r, float g, float b, int thick)
+        {
+            for (int i = 0; i < thick; i++)
+                App::DrawLine(x + (float)i, 0.0f, x + (float)i, screenH, r, g, b);
+        };
+
+    auto DrawThickH = [&](float y, float r, float g, float b, int thick)
+        {
+            for (int i = 0; i < thick; i++)
+                App::DrawLine(0.0f, y + (float)i, screenW, y + (float)i, r, g, b);
+        };
+
+    // Draw enough lines to cover screen (+1 cell margin)
+    const int cols = (int)(screenW / grid) + 3;
+    const int rows = (int)(screenH / grid) + 3;
+
+    // Vertical grid lines (world anchored)
+    for (int i = -1; i < cols; i++)
+    {
+        const float x = ox + (float)i * grid;
+
+        // Major every 4 cells (based on world cell index, not screen)
+        const int worldCol = (int)std::floor((offX + x) / grid);
+        const bool major = (worldCol % 4) == 0;
+
+        const int thick = major ? 3 : 2;
+        const float a = major ? (0.085f + majorPulse) : 0.055f;
+
+        DrawThickV(x, a, a + 0.01f, a + 0.03f, thick);
+    }
+
+    // Horizontal grid lines (world anchored)
+    for (int j = -1; j < rows; j++)
+    {
+        const float y = oy + (float)j * grid;
+
+        const int worldRow = (int)std::floor((offY + y) / grid);
+        const bool major = (worldRow % 4) == 0;
+
+        const int thick = major ? 3 : 2;
+        const float a = major ? (0.085f + majorPulse) : 0.055f;
+
+        DrawThickH(y, a, a + 0.01f, a + 0.03f, thick);
+    }
+
+    // Panel seams (world anchored)
+    for (int j = -1; j < rows; j++)
+    {
+        for (int i = -1; i < cols; i++)
+        {
+            const float x0 = ox + (float)i * grid;
+            const float y0 = oy + (float)j * grid;
+
+            // Alternate using world indices so it doesn't "swim"
+            const int wc = (int)std::floor((offX + x0) / grid);
+            const int wr = (int)std::floor((offY + y0) / grid);
+            const bool alt = ((wc + wr) & 1) != 0;
+
+            const float seam = alt ? 0.075f : 0.060f;
+
+            // top-left notch
+            App::DrawLine(x0 + 6.0f, y0 + 6.0f, x0 + 20.0f, y0 + 6.0f, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + 6.0f, y0 + 6.0f, x0 + 6.0f, y0 + 20.0f, seam, seam + 0.01f, seam + 0.03f);
+
+            // bottom-right notch
+            App::DrawLine(x0 + grid - 6.0f, y0 + grid - 6.0f, x0 + grid - 20.0f, y0 + grid - 6.0f, seam, seam + 0.01f, seam + 0.03f);
+            App::DrawLine(x0 + grid - 6.0f, y0 + grid - 6.0f, x0 + grid - 6.0f, y0 + grid - 20.0f, seam, seam + 0.01f, seam + 0.03f);
+        }
+    }
+}
+
+
 // Cheap deterministic hash -> [0,1)
 static float Hash01(uint32_t v)
 {
@@ -79,7 +190,7 @@ void WorldRenderer::NotifyKills(int kills)
     if (killPopupTimeMs > 0.0f) killPopupCount += kills;
     else killPopupCount = kills;
 
-    killPopupTimeMs = 900.0f;
+    killPopupTimeMs = 1200.0f;
 }
 
 // --------------------------------------------
@@ -95,8 +206,14 @@ void WorldRenderer::RenderWorld(
     float dtMs,
     bool densityView)
 {
+
+
+    
+
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
+
+    DrawSciFiLabBackground(dtMs, offX, offY);
 
     const float playerScreenX = px - offX;
     const float playerScreenY = py - offY;
@@ -349,7 +466,7 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
     y = std::clamp(y, 10.0f, kScreenH - 30.0f);
 
     float r = 1.0f, g = 0.90f, b = 0.20f;
-    int thicknessPasses = 1;
+    int thicknessPasses =2;
     float popY = 0.0f;
 
     const char* suffix = "";
@@ -357,16 +474,16 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
     if (killPopupCount >= 100 && killPopupCount < 1000)
     {
         r = 1.0f; g = 0.55f; b = 0.10f;
-        thicknessPasses = 2;
+        thicknessPasses = 4;
         suffix = "  KILL FRENZY";
     }
     else if (killPopupCount >= 1000)
     {
         r = 1.0f; g = 0.15f; b = 0.15f;
-        thicknessPasses = 4;
+        thicknessPasses = 8;
         suffix = "  UNSTOPPABLE ALL CHAOS";
 
-        const float t01 = Clamp01(killPopupTimeMs / 900.0f);
+        const float t01 = Clamp01(killPopupTimeMs / 1200.0f);
         popY = (1.0f - t01) * -10.0f;
     }
 
@@ -404,7 +521,7 @@ void WorldRenderer::RenderKillPopupOverPlayer(float playerScreenX, float playerS
         PrintThick(ix + approxWidth + 10, iy, suffix);
     }
 
-    const float t = Clamp01(killPopupTimeMs / 900.0f);
+    const float t = Clamp01(killPopupTimeMs / 1200.0f);
     DrawBarLines(
         x, (y - 12.0f) + popY, 180.0f, 6.0f, t,
         0.10f, 0.10f, 0.10f,
