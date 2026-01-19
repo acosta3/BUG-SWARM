@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
 namespace GameConfig
@@ -11,6 +11,14 @@ namespace GameConfig
         static constexpr int POPUP_POOL_SIZE = 64;
         static constexpr int PROJECTILE_POOL_SIZE = 128;
     };
+    
+    struct SystemCapacity
+    {
+        static constexpr int MAX_ZOMBIES = 200'000;
+        static constexpr int MAX_HIVES = 10;
+        static constexpr int MAX_OBSTACLES = 1000;
+    };
+
 
     // Mathematical Constants - Shared across all systems
     // Note: PI is already defined in AppSettings.h as a macro
@@ -151,8 +159,8 @@ namespace GameConfig
     {
         static constexpr float SCREEN_W = 1024.0f;
         static constexpr float SCREEN_H = 768.0f;
-        static constexpr int FULL_DRAW_THRESHOLD = 50000;
-        static constexpr int MAX_DRAW = 10000;
+        static constexpr int FULL_DRAW_THRESHOLD = 200'000;
+        static constexpr int MAX_DRAW = 200'000;
 
         // Vignette settings
         static constexpr int VIGNETTE_BAND_SIZE = 70;

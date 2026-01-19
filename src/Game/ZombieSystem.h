@@ -1,4 +1,4 @@
-// ZombieSystem.h - AAA Quality Version
+﻿// ZombieSystem.h - AAA Quality Version
 #pragma once
 #include <vector>
 #include <cstdint>
@@ -121,6 +121,7 @@ private:
 
     // Spatial grid helpers
     int CellIndex(float x, float y) const;
+    void BuildSpatialGrid(float playerX, float playerY);  // ✅ NEW: Optimized grid builder
 
     // Per-frame update helpers
     void TickTimers(int i, float deltaTimeMs);
@@ -170,7 +171,7 @@ private:
     ZombieTypeStats typeStats[ZTYPE_COUNT];
 
 private:
-    // Separation spatial grid
+    // ✅ OPTIMIZATION: Spatial grid improvements
     float cellSize = 40.0f;
     int gridW = 0;
     int gridH = 0;
@@ -183,7 +184,12 @@ private:
     std::vector<int> cellStart;   // Prefix sum array (size = gridW*gridH + 1)
     std::vector<int> cellCount;   // Count per cell (size = gridW*gridH)
     std::vector<int> cellList;    // Zombie indices sorted by cell (size = maxCount)
-    std::vector<int> writeCursor; // Temporary for grid building (size = gridW*gridH + 1)
+
+    // ✅ NEW: Grid optimization members
+    std::vector<int> nearList;              // Pre-allocated near zombie list
+    bool gridDirty = true;                  // Flag to rebuild grid
+    float gridRebuildTimerMs = 0.0f;        // Timer for periodic rebuild
+    static constexpr float GRID_REBUILD_INTERVAL_MS = 50.0f;  // Rebuild every 50ms
 
 private:
     // Kill tracking

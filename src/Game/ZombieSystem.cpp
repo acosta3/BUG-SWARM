@@ -1,4 +1,4 @@
-﻿// ZombieSystem.cpp - AAA Quality Version
+﻿// ZombieSystem.cpp - AAA Quality Version with Spatial Grid Optimizations
 #include "ZombieSystem.h"
 #include "NavGrid.h"
 #include "GameConfig.h"
@@ -130,37 +130,42 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     aliveCount = 0;
 
     // Allocate SoA storage
-    posX.resize(maxCount);
-    posY.resize(maxCount);
-    velX.resize(maxCount);
-    velY.resize(maxCount);
-    type.resize(maxCount);
-    state.resize(maxCount);
-    fearTimerMs.resize(maxCount);
-    attackCooldownMs.resize(maxCount);
-    hp.resize(maxCount);
-    flowAssistMs.resize(maxCount);
+    posX.assign(maxCount, 0.0f);
+    posY.assign(maxCount, 0.0f);
+    velX.assign(maxCount, 0.0f);
+    velY.assign(maxCount, 0.0f);
+    type.assign(maxCount, 0);
+    state.assign(maxCount, 0);
+    fearTimerMs.assign(maxCount, 0.0f);
+    attackCooldownMs.assign(maxCount, 0.0f);
+    hp.assign(maxCount, 0);
+    flowAssistMs.assign(maxCount, 0.0f);
 
     InitTypeStats();
 
-    // Copy world bounds from NavGrid (single source of truth)
+    // Copy world bounds from NavGrid
     worldMinX = nav.WorldMinX();
     worldMinY = nav.WorldMinY();
     worldMaxX = nav.WorldMaxX();
     worldMaxY = nav.WorldMaxY();
 
-    // Separation grid uses ZombieSystem cellSize
+    // ✅ OPTIMIZATION #4: Larger cell size (matches separation radius)
+    cellSize = tuning.sepRadius * 2.0f;  // ~36-40 pixels instead of 40
+
     gridW = static_cast<int>((worldMaxX - worldMinX) / cellSize) + 1;
     gridH = static_cast<int>((worldMaxY - worldMinY) / cellSize) + 1;
 
     const int totalCells = gridW * gridH;
-    cellStart.resize(totalCells + 1);
-    cellCount.resize(totalCells);
-    writeCursor.resize(totalCells + 1);
-    cellList.resize(maxCount);
+    cellStart.assign(totalCells + 1, 0);
+    cellCount.assign(totalCells, 0);
+    cellList.assign(maxCount, 0);
+
+    // ✅ OPTIMIZATION #3: Pre-allocate nearList
+    nearList.reserve(maxCount);
 
     killsThisFrame = 0;
     lastMoveKills = 0;
+    gridDirty = true;
 }
 
 void ZombieSystem::Clear()
@@ -168,6 +173,7 @@ void ZombieSystem::Clear()
     aliveCount = 0;
     killsThisFrame = 0;
     lastMoveKills = 0;
+    gridDirty = true;
 }
 
 // -------------------- Spawning --------------------
@@ -190,6 +196,7 @@ bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
     hp[i] = typeStats[t].maxHP;
     flowAssistMs[i] = 0.0f;
 
+    gridDirty = true;  // ✅ Mark grid as needing rebuild
     return true;
 }
 
@@ -217,12 +224,14 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
         hp[i] = typeStats[t].maxHP;
         flowAssistMs[i] = 0.0f;
     }
+
+    gridDirty = true;  // ✅ Mark grid as needing rebuild
 }
 
 // -------------------- Type Configuration --------------------
 void ZombieSystem::InitTypeStats()
 {
-    using ZC = GameConfig::ZombieConfig; // alias so lines stay short
+    using ZC = GameConfig::ZombieConfig;
 
     typeStats[GREEN] = {
         ZC::GREEN_MAX_SPEED,
@@ -265,7 +274,6 @@ void ZombieSystem::InitTypeStats()
     };
 }
 
-
 uint8_t ZombieSystem::RollTypeWeighted() const
 {
     const float r = Rand01();
@@ -300,6 +308,7 @@ void ZombieSystem::KillSwapRemove(int index)
     }
 
     aliveCount--;
+    gridDirty = true;  // ✅ Mark grid as needing rebuild
 }
 
 void ZombieSystem::Despawn(int index)
@@ -325,56 +334,55 @@ int ZombieSystem::CellIndex(float x, float y) const
     return cy * gridW + cx;
 }
 
-namespace
+// ✅ OPTIMIZATION #1 + #2: Optimized grid builder
+void ZombieSystem::BuildSpatialGrid(float playerX, float playerY)
 {
-    void BuildGridNear_Internal(
-        int gridW, int gridH,
-        float worldMinX, float worldMinY,
-        float cellSize,
-        const std::vector<float>& posX,
-        const std::vector<float>& posY,
-        const std::vector<int>& indices,
-        std::vector<int>& cellCount,
-        std::vector<int>& cellStart,
-        std::vector<int>& writeCursor,
-        std::vector<int>& cellList)
+    const float sepActiveRadiusSq = tuning.sepActiveRadius * tuning.sepActiveRadius;
+    const int cellN = gridW * gridH;
+
+    // Build near zombie list
+    nearList.clear();
+    for (int i = 0; i < aliveCount; i++)
     {
-        const int cellN = gridW * gridH;
-        std::fill(cellCount.begin(), cellCount.end(), 0);
+        const float dx = playerX - posX[i];
+        const float dy = playerY - posY[i];
+        const float d2 = dx * dx + dy * dy;
 
-        auto CellIndexLocal = [=](float x, float y) -> int
-            {
-                int cx = static_cast<int>((x - worldMinX) / cellSize);
-                int cy = static_cast<int>((y - worldMinY) / cellSize);
-                cx = std::clamp(cx, 0, gridW - 1);
-                cy = std::clamp(cy, 0, gridH - 1);
-                return cy * gridW + cx;
-            };
-
-        // Count zombies per cell
-        for (const int i : indices)
-        {
-            const int c = CellIndexLocal(posX[i], posY[i]);
-            cellCount[c]++;
-        }
-
-        // Build prefix sum
-        cellStart[0] = 0;
-        for (int c = 0; c < cellN; c++)
-        {
-            cellStart[c + 1] = cellStart[c] + cellCount[c];
-        }
-
-        writeCursor = cellStart;
-
-        // Place zombies into grid
-        for (const int i : indices)
-        {
-            const int c = CellIndexLocal(posX[i], posY[i]);
-            const int dst = writeCursor[c]++;
-            cellList[dst] = i;
-        }
+        if (d2 <= sepActiveRadiusSq)
+            nearList.push_back(i);
     }
+
+    // Clear counts
+    std::fill(cellCount.begin(), cellCount.end(), 0);
+
+    // Count zombies per cell
+    for (const int i : nearList)
+    {
+        const int c = CellIndex(posX[i], posY[i]);
+        cellCount[c]++;
+    }
+
+    // Build prefix sum
+    cellStart[0] = 0;
+    for (int c = 0; c < cellN; c++)
+    {
+        cellStart[c + 1] = cellStart[c] + cellCount[c];
+    }
+
+    // Place zombies into grid (using cellStart as write cursor)
+    for (const int i : nearList)
+    {
+        const int c = CellIndex(posX[i], posY[i]);
+        const int dst = cellStart[c]++;
+        cellList[dst] = i;
+    }
+
+    // Restore cellStart (shift back)
+    for (int c = cellN; c > 0; c--)
+    {
+        cellStart[c] = cellStart[c - 1];
+    }
+    cellStart[0] = 0;
 }
 
 // -------------------- Per-Frame Helpers --------------------
@@ -445,6 +453,7 @@ void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioD
     NormalizeSafe(ioDX, ioDY);
 }
 
+// ✅ OPTIMIZATION #5: Optimized separation with early-out
 void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) const
 {
     outSepX = 0.0f;
@@ -457,50 +466,82 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
     const int cy = c / gridW;
 
     int checked = 0;
-    const int maxChecks = ZombieConfig::MAX_SEPARATION_CHECKS;
+    const int maxChecks = 32;
 
-    for (int oy = -1; oy <= 1; oy++)
+    float totalSepX = 0.0f;
+    float totalSepY = 0.0f;
+
+    // Check own cell first (most likely to have neighbors)
     {
-        const int ny = cy + oy;
-        if (ny < 0 || ny >= gridH)
-            continue;
+        const int start = cellStart[c];
+        const int end = cellStart[c + 1];
 
-        for (int ox = -1; ox <= 1; ox++)
+        for (int k = start; k < end && checked < maxChecks; k++)
         {
-            const int nx = cx + ox;
-            if (nx < 0 || nx >= gridW)
-                continue;
+            const int j = cellList[k];
+            if (j == i) continue;
 
-            const int nc = ny * gridW + nx;
-            const int start = cellStart[nc];
-            const int end = cellStart[nc + 1];
+            const float ax = posX[i] - posX[j];
+            const float ay = posY[i] - posY[j];
+            const float d2 = ax * ax + ay * ay;
 
-            for (int k = start; k < end; k++)
+            if (d2 > ZombieConfig::MOVEMENT_EPSILON && d2 < sepRadiusSq)
             {
-                const int j = cellList[k];
-                if (j == i)
-                    continue;
+                const float d = std::sqrt(d2);
+                const float invD = 1.0f / d;
+                const float push = (sepRadius - d) / sepRadius;
 
-                const float ax = posX[i] - posX[j];
-                const float ay = posY[i] - posY[j];
-                const float d2 = ax * ax + ay * ay;
+                totalSepX += ax * invD * push;
+                totalSepY += ay * invD * push;
+                checked++;
+            }
+        }
+    }
 
-                if (d2 > ZombieConfig::MOVEMENT_EPSILON && d2 < sepRadiusSq)
+    // Only check adjacent cells if needed
+    if (checked < maxChecks)
+    {
+        for (int oy = -1; oy <= 1; oy++)
+        {
+            const int ny = cy + oy;
+            if (ny < 0 || ny >= gridH) continue;
+
+            for (int ox = -1; ox <= 1; ox++)
+            {
+                if (ox == 0 && oy == 0) continue;  // Already checked own cell
+
+                const int nx = cx + ox;
+                if (nx < 0 || nx >= gridW) continue;
+
+                const int nc = ny * gridW + nx;
+                const int start = cellStart[nc];
+                const int end = cellStart[nc + 1];
+
+                for (int k = start; k < end && checked < maxChecks; k++)
                 {
-                    const float d = std::sqrt(d2);
-                    const float invD = 1.0f / d;
-                    const float push = (sepRadius - d) / sepRadius;
+                    const int j = cellList[k];
 
-                    outSepX += ax * invD * push;
-                    outSepY += ay * invD * push;
+                    const float ax = posX[i] - posX[j];
+                    const float ay = posY[i] - posY[j];
+                    const float d2 = ax * ax + ay * ay;
 
-                    checked++;
-                    if (checked >= maxChecks)
-                        return;
+                    if (d2 > ZombieConfig::MOVEMENT_EPSILON && d2 < sepRadiusSq)
+                    {
+                        const float d = std::sqrt(d2);
+                        const float invD = 1.0f / d;
+                        const float push = (sepRadius - d) / sepRadius;
+
+                        totalSepX += ax * invD * push;
+                        totalSepY += ay * invD * push;
+                        checked++;
+                    }
                 }
             }
         }
     }
+
+    outSepX = totalSepX;
+    outSepY = totalSepY;
 }
 
 // -------------------- Lightweight Update --------------------
@@ -547,32 +588,14 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     static uint32_t frameCounter = 0;
     frameCounter++;
 
-    // Build near zombie list
-    static std::vector<int> nearList;
-    nearList.clear();
-    nearList.reserve(aliveCount);
-
-    for (int i = 0; i < aliveCount; i++)
+    // ✅ OPTIMIZATION #1: Only rebuild grid periodically
+    gridRebuildTimerMs += deltaTimeMs;
+    if (gridRebuildTimerMs >= GRID_REBUILD_INTERVAL_MS || gridDirty)
     {
-        const float dx = playerX - posX[i];
-        const float dy = playerY - posY[i];
-        const float d2 = dx * dx + dy * dy;
-
-        if (d2 <= sepActiveRadiusSq)
-            nearList.push_back(i);
+        gridRebuildTimerMs = 0.0f;
+        gridDirty = false;
+        BuildSpatialGrid(playerX, playerY);
     }
-
-    // Build separation grid
-    BuildGridNear_Internal(
-        gridW, gridH,
-        worldMinX, worldMinY,
-        cellSize,
-        posX, posY,
-        nearList,
-        cellCount,
-        cellStart,
-        writeCursor,
-        cellList);
 
     // Process all zombies
     for (int i = 0; i < aliveCount; )

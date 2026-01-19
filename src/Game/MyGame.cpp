@@ -287,6 +287,8 @@ void MyGame::InitObstacles()
     AddBlock(-120.0f, 90.0f);
     AddBlock(-320.0f, -40.0f);
     AddBlock(-320.0f, 90.0f);
+
+    //nav.ClearObstacles(); // delete after 
 }
 
 void MyGame::InitSystems()
@@ -295,9 +297,9 @@ void MyGame::InitSystems()
     player.GetWorldPosition(px, py);
 
     hives.Init();
-    zombies.Init(kMaxZombies, nav);
+    zombies.Init(GameConfig::SystemCapacity::MAX_ZOMBIES, nav);
 
-    const int totalToSpawn = kMaxZombies;
+    const int totalToSpawn = GameConfig::SystemCapacity::MAX_ZOMBIES;
     const auto& hiveList = hives.GetHives();
 
     int aliveCount = 0;
@@ -505,11 +507,11 @@ void MyGame::ResetRun()
 
     // Reset systems
     hives.Init();
-    zombies.Init(kMaxZombies, nav);
+    zombies.Init(GameConfig::SystemCapacity::MAX_ZOMBIES, nav);
 
     // Spawn zombies distributed across alive hives
     {
-        const int totalToSpawn = kMaxZombies;
+        const int totalToSpawn = GameConfig::SystemCapacity::MAX_ZOMBIES;
         const auto& hiveList = hives.GetHives();
 
         int aliveCount = 0;
