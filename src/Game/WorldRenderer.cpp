@@ -595,14 +595,84 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
     Rot(-size, size, bx, by);
     Rot(size, size, cx, cy);
 
-    App::DrawTriangle(
-        x + ax, y + ay, 0, 1,
-        x + bx, y + by, 0, 1,
-        x + cx, y + cy, 0, 1,
-        r, g, b, r, g, b, r, g, b, false
-    );
+    // ---------------------------
+    // Body: shadow + fill + outline + inner panel
+    // ---------------------------
+    {
+        // Shadow/backplate (makes it pop off the floor)
+        const float shadowScale = 1.18f;
+        const float sr = r * 0.10f;
+        const float sg = g * 0.10f;
+        const float sb = b * 0.10f;
 
-    // Legs in local space, then rotate them too
+        App::DrawTriangle(
+            x + ax * shadowScale, y + ay * shadowScale, 0, 1,
+            x + bx * shadowScale, y + by * shadowScale, 0, 1,
+            x + cx * shadowScale, y + cy * shadowScale, 0, 1,
+            sr, sg, sb, sr, sg, sb, sr, sg, sb, false
+        );
+
+        // Main fill (slightly toned down so it isn't a neon blob)
+        const float fr = r * 0.85f;
+        const float fg = g * 0.85f;
+        const float fb = b * 0.85f;
+
+        App::DrawTriangle(
+            x + ax, y + ay, 0, 1,
+            x + bx, y + by, 0, 1,
+            x + cx, y + cy, 0, 1,
+            fr, fg, fb, fr, fg, fb, fr, fg, fb, false
+        );
+
+        // Outline (thin bright edge)
+        const float orr = min(1.0f, fr + 0.20f);
+        const float org = min(1.0f, fg + 0.20f);
+        const float orb = min(1.0f, fb + 0.25f);
+
+        App::DrawLine(x + ax, y + ay, x + bx, y + by, orr, org, orb);
+        App::DrawLine(x + bx, y + by, x + cx, y + cy, orr, org, orb);
+        App::DrawLine(x + cx, y + cy, x + ax, y + ay, orr, org, orb);
+
+        // Inner “carapace panel” highlight (gives depth)
+        const float inner = 0.55f;
+        App::DrawTriangle(
+            x + ax * inner, y + ay * inner, 0, 1,
+            x + bx * inner, y + by * inner, 0, 1,
+            x + cx * inner, y + cy * inner, 0, 1,
+            min(1.0f, fr + 0.18f), min(1.0f, fg + 0.18f),min(1.0f, fb + 0.22f),
+            min(1.0f, fr + 0.10f), min(1.0f, fg + 0.10f), min(1.0f, fb + 0.12f),
+            min(1.0f, fr + 0.05f), min(1.0f, fg + 0.05f), min(1.0f, fb + 0.06f),
+            false
+        );
+    }
+
+    // ---------------------------
+    // Eyes: tiny glowing crosses
+    // ---------------------------
+    {
+        float ex1, ey1, ex2, ey2;
+        Rot(-size * 0.22f, -size * 0.18f, ex1, ey1);
+        Rot(size * 0.22f, -size * 0.18f, ex2, ey2);
+
+        const float eye = max(1.0f, size * 0.18f);
+
+        // Slight cyan glow (sci-fi)
+        const float er = 0.70f;
+        const float eg = 0.95f;
+        const float eb = 1.00f;
+
+        App::DrawLine(x + ex1 - eye, y + ey1, x + ex1 + eye, y + ey1, er, eg, eb);
+        App::DrawLine(x + ex1, y + ey1 - eye, x + ex1, y + ey1 + eye, er, eg, eb);
+
+        App::DrawLine(x + ex2 - eye, y + ey2, x + ex2 + eye, y + ey2, er, eg, eb);
+        App::DrawLine(x + ex2, y + ey2 - eye, x + ex2, y + ey2 + eye, er, eg, eb);
+    }
+
+  
+
+    // ---------------------------
+    // Legs (same as before)
+    // ---------------------------
     const float lx = size * 1.3f;
     const float ly = size * 0.7f;
 
@@ -626,6 +696,7 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
     Rot(size * 0.5f, size * 0.8f, p1x, p1y); Rot(lx, ly, p2x, p2y);
     App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
 }
+
 
 float WorldRenderer::Clamp01(float v)
 {
