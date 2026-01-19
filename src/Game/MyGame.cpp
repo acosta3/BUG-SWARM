@@ -971,23 +971,23 @@ void MyGame::RenderMenu() const
         {
         case DifficultyLevel::Easy:
             r = 0.10f; g = 1.00f; b = 0.10f;
-            name = "EASY";
-            desc = "20,000 Hostiles";
+            name = "LIGHT";
+            desc = "20,000 Bugs";
             break;
         case DifficultyLevel::Medium:
             r = 1.00f; g = 0.95f; b = 0.20f;
-            name = "MEDIUM";
-            desc = "50,000 Hostiles";
+            name = "MODERATE";
+            desc = "50,000 Bugs";
             break;
         case DifficultyLevel::Hard:
             r = 1.00f; g = 0.55f; b = 0.10f;
-            name = "HARD";
-            desc = "150,000 Hostiles";
+            name = "HEAVY";
+            desc = "150,000 Bugs";
             break;
         case DifficultyLevel::Extreme:
             r = 1.00f; g = 0.15f; b = 0.15f;
-            name = "EXTREME";
-            desc = "200,000 Hostiles";
+            name = "INFESTATION";
+            desc = "200,000 Bugs";
             break;
         }
 
