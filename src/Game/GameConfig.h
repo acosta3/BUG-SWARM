@@ -326,4 +326,57 @@ namespace GameConfig
         static constexpr uint32_t HASH_MASK = 0x00FFFFFFu;
         static constexpr uint32_t HASH_DIVISOR = 0x01000000u;
     };
+
+    // NEW: Hive System Configuration
+    struct HiveConfig
+    {
+        // Hive placement
+        static constexpr float WORLD_MIN = -1500.0f;
+        static constexpr float WORLD_MAX = 1500.0f;
+        static constexpr float PLACEMENT_MARGIN = 220.0f;
+        static constexpr float MIN_HIVE_DISTANCE = 900.0f;
+        static constexpr int HIVE_COUNT = 5;
+        static constexpr int MAX_PLACEMENT_ATTEMPTS = 700;
+        static constexpr int PLACEMENT_SEED = 1337;
+
+        // Hive stats
+        static constexpr float NORMAL_HIVE_RADIUS = 30.0f;
+        static constexpr float BOSS_HIVE_RADIUS = 34.0f;
+        static constexpr float NORMAL_HIVE_HP = 120.0f;
+        static constexpr float BOSS_HIVE_HP = 160.0f;
+        static constexpr float SPAWN_PER_MINUTE = 100.0f;
+        static constexpr float MAX_SPAWN_ACCUM = 10.0f;
+
+        // Spawn zone around hive
+        static constexpr float SPAWN_RADIUS_MIN_OFFSET = 10.0f;
+        static constexpr float SPAWN_RADIUS_MAX_OFFSET = 55.0f;
+        static constexpr int SPAWN_PLACEMENT_ATTEMPTS = 10;
+
+        // Rendering
+        static constexpr int CIRCLE_SEGMENTS = 28;
+        static constexpr float PULSE_FREQUENCY = 3.0f;
+        static constexpr float PULSE_BASE = 0.5f;
+        static constexpr float PULSE_AMP = 0.5f;
+        static constexpr float PULSE_RING_OFFSET = 2.0f;
+        static constexpr float PULSE_RING_SIZE = 2.0f;
+        static constexpr int SPOKE_COUNT = 20;
+        static constexpr float SPOKE_ROTATION_SPEED = 1.2f;
+        static constexpr float SPOKE_LENGTH = 6.0f;
+        static constexpr float SPOKE_RADIUS_MULT = 0.82f;
+        static constexpr float INNER_RING_1_MULT = 0.55f;
+        static constexpr float INNER_RING_2_MULT = 0.35f;
+        static constexpr float ARC_1_SPEED = 1.5f;
+        static constexpr float ARC_1_LENGTH = 1.3f;
+        static constexpr float ARC_2_SPEED = 1.8f;
+        static constexpr float ARC_2_LENGTH = 1.1f;
+        static constexpr int ARC_SEGMENTS = 18;
+        static constexpr float HP_BAR_WIDTH = 64.0f;
+        static constexpr float HP_BAR_OFFSET_Y = 12.0f;
+        static constexpr float ANIM_TIME_RESET = 100000.0f;
+
+        // Mathematical constants
+        static constexpr float TWO_PI = 6.28318530718f;
+        static constexpr float SECONDS_PER_MINUTE = 60.0f;
+        static constexpr float MS_TO_SEC = 0.001f;
+    };
 }
