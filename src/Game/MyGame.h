@@ -10,6 +10,7 @@
 #include "HiveSystem.h"
 #include "WorldRenderer.h"
 #include "GameConfig.h"
+#include "DifficultyManager.h"
 #include <vector>
 
 class MyGame
@@ -21,23 +22,16 @@ public:
     void Render();
     void Shutdown();
 
-private:
-    enum class DifficultyLevel
-    {
-        Easy = 0,      // 20,000
-        Medium = 1,    // 50,000
-        Hard = 2,      // 150,000
-        Extreme = 3    // 200,000
-    };
+    DifficultyLevel GetSelectedDifficulty() const { return selectedDifficulty; }
+    const Player& GetPlayer() const { return player; }
+    const ZombieSystem& GetZombies() const { return zombies; }
+    const HiveSystem& GetHives() const { return hives; }
 
+private:
     int GetMaxZombiesForDifficulty() const;
-    const char* GetDifficultyName() const;
-    const char* GetDifficultyDescription() const;
-    void GetDifficultyColor(float& r, float& g, float& b) const;
 
     void BeginWin();
-    void ResetRun();              // resets gameplay state (hives/zombies/player/attacks)
-    void RenderWinOverlay() const;
+    void ResetRun();
 
     // Init
     void InitWorld();
@@ -80,9 +74,6 @@ private:
         Paused,
         Win
     };
-
-    void RenderMenu() const;
-    void RenderPauseOverlay() const;
 
 private:
     InputSystem input;

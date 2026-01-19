@@ -1,6 +1,8 @@
 ﻿// WorldRenderer.cpp
 #include "WorldRenderer.h"
 #include "GameConfig.h"
+#include "MathUtils.h"
+#include "RenderUtils.h"
 
 #include "../ContestAPI/app.h"
 
@@ -19,16 +21,12 @@
 
 static float Clamp01f(float v)
 {
-    if (v < 0.0f) return 0.0f;
-    if (v > 1.0f) return 1.0f;
-    return v;
+    return MathUtils::Clamp01(v);
 }
 
 static float WrapMod(float v, float m)
 {
-    float r = std::fmod(v, m);
-    if (r < 0.0f) r += m;
-    return r;
+    return MathUtils::WrapMod(v, m);
 }
 
 static void DrawVignette()
@@ -389,10 +387,7 @@ void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& 
 
 void WorldRenderer::DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const
 {
-    App::DrawLine(x0, y0, x1, y0, r, g, b);
-    App::DrawLine(x1, y0, x1, y1, r, g, b);
-    App::DrawLine(x1, y1, x0, y1, r, g, b);
-    App::DrawLine(x0, y1, x0, y0, r, g, b);
+    RenderUtils::DrawRectOutline(x0, y0, x1, y1, r, g, b);
 }
 
 void WorldRenderer::DrawBarLines(
@@ -816,7 +811,5 @@ void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem
 
 float WorldRenderer::Clamp01(float v)
 {
-    if (v < 0.0f) return 0.0f;
-    if (v > 1.0f) return 1.0f;
-    return v;
+    return MathUtils::Clamp01(v);
 }

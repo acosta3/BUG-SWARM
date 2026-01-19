@@ -2,6 +2,7 @@
 #include "ZombieSystem.h"
 #include "NavGrid.h"
 #include "GameConfig.h"
+#include "MathUtils.h"
 
 #include <cstdlib>
 #include <cmath>
@@ -9,30 +10,6 @@
 #include <cstdint>
 
 using namespace GameConfig;
-
-namespace
-{
-    float Rand01()
-    {
-        return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    }
-
-    void NormalizeSafe(float& x, float& y)
-    {
-        const float len2 = x * x + y * y;
-        if (len2 > ZombieConfig::MOVEMENT_EPSILON)
-        {
-            const float inv = 1.0f / std::sqrt(len2);
-            x *= inv;
-            y *= inv;
-        }
-        else
-        {
-            x = 0.0f;
-            y = 0.0f;
-        }
-    }
-}
 
 bool ZombieSystem::PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const
 {
@@ -203,8 +180,8 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
         const int i = aliveCount++;
         const uint8_t t = RollTypeWeighted();
 
-        const float ang = Rand01() * ZombieConfig::TWO_PI;
-        const float r = minR + (maxR - minR) * Rand01();
+        const float ang = MathUtils::Rand01() * ZombieConfig::TWO_PI;
+        const float r = minR + (maxR - minR) * MathUtils::Rand01();
 
         posX[i] = playerX + std::cos(ang) * r;
         posY[i] = playerY + std::sin(ang) * r;
@@ -268,7 +245,7 @@ void ZombieSystem::InitTypeStats()
 
 uint8_t ZombieSystem::RollTypeWeighted() const
 {
-    const float r = Rand01();
+    const float r = MathUtils::Rand01();
 
     if (r < ZombieConfig::GREEN_SPAWN_CHANCE)
         return GREEN;
@@ -412,14 +389,14 @@ void ZombieSystem::ComputeSeekDir(int i, float playerX, float playerY, float& ou
 {
     outDX = playerX - posX[i];
     outDY = playerY - posY[i];
-    NormalizeSafe(outDX, outDY);
+    MathUtils::NormalizeSafe(outDX, outDY);
 }
 
 void ZombieSystem::ComputeFleeDir(int i, float playerX, float playerY, float& outDX, float& outDY) const
 {
     outDX = posX[i] - playerX;
     outDY = posY[i] - playerY;
-    NormalizeSafe(outDX, outDY);
+    MathUtils::NormalizeSafe(outDX, outDY);
 }
 
 void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioDX, float& ioDY) const
@@ -438,7 +415,7 @@ void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioD
 
     ioDX = ioDX * (1.0f - flowWeight) + fx * flowWeight;
     ioDY = ioDY * (1.0f - flowWeight) + fy * flowWeight;
-    NormalizeSafe(ioDX, ioDY);
+    MathUtils::NormalizeSafe(ioDX, ioDY);
 }
 
 void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) const
@@ -696,7 +673,7 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
 
         float vx = dx * s.seekWeight + sepX * s.sepWeight;
         float vy = dy * s.seekWeight + sepY * s.sepWeight;
-        NormalizeSafe(vx, vy);
+        MathUtils::NormalizeSafe(vx, vy);
 
         velX[i] = vx * s.maxSpeed;
         velY[i] = vy * s.maxSpeed;
@@ -760,10 +737,10 @@ void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
 
 float ZombieSystem::Clamp01(float v)
 {
-    return std::clamp(v, 0.0f, 1.0f);
+    return MathUtils::Clamp01(v);
 }
 
 void ZombieSystem::NormalizeSafe(float& x, float& y)
 {
-    ::NormalizeSafe(x, y);
+    MathUtils::NormalizeSafe(x, y);
 }
