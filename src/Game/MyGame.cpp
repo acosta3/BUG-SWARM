@@ -39,23 +39,24 @@ void MyGame::Update(float dtMs)
 {
     lastDtMs = dtMs;
 
-    // Always read input, even in menu/pause, so we can Start/Resume
+    // IMPORTANT: Update input ONCE per frame
     input.SetEnabled(true);
     input.Update(dtMs);
 
     const InputState& in = input.GetState();
+
+    // Handle any "global" input that just reads state (no re-update)
+    UpdateInput(dtMs);
 
     // -----------------------------
     // Menu
     // -----------------------------
     if (mode == GameMode::Menu)
     {
-        // Start game
         if (in.startPressed)
         {
             mode = GameMode::Playing;
 
-            // Optional: make sure we are in a clean playing state
             life = LifeState::Playing;
             lifeTimerMs = 0.0f;
             player.Revive(true);
@@ -102,10 +103,8 @@ void MyGame::Update(float dtMs)
     {
         lifeTimerMs += dtMs;
 
-        // Camera stays smooth even while input is locked
         UpdateCamera(dtMs, px, py);
 
-        // World can keep simulating while dead/locked
         hives.Update(dtMs, zombies, nav);
         UpdateZombies(dtMs, px, py);
 
@@ -120,7 +119,6 @@ void MyGame::Update(float dtMs)
         }
         else
         {
-            // Cooldowns can tick during grace
             attacks.Update(dtMs);
 
             if (lifeTimerMs >= respawnGraceMs)
@@ -137,8 +135,6 @@ void MyGame::Update(float dtMs)
     // -----------------------------
     // Normal gameplay
     // -----------------------------
-    UpdateInput(dtMs);
-
     UpdatePlayer(dtMs);
     hives.Update(dtMs, zombies, nav);
 
@@ -168,7 +164,6 @@ void MyGame::Render()
         return;
     }
 
-    // Render the world normally (even when paused, we want the frozen frame + overlay)
     renderer.RenderFrame(camera, player, nav, zombies, hives, attacks, lastDtMs, densityView);
 
     if (mode == GameMode::Paused)
@@ -318,16 +313,12 @@ void MyGame::InitSystems()
 // ------------------------------------------------------------
 bool MyGame::InputLocked() const
 {
-    // Locked only for death/grace. Pause/menu is handled by GameMode.
     return (life != LifeState::Playing);
 }
 
-void MyGame::UpdateInput(float dtMs)
+void MyGame::UpdateInput(float /*dtMs*/)
 {
-    // When dead/grace, keep your old "neutral" behavior
-    input.SetEnabled(!InputLocked());
-    input.Update(dtMs);
-
+    // IMPORTANT: do NOT call input.Update() here
     const InputState& in = input.GetState();
     if (in.toggleViewPressed)
         densityView = !densityView;
@@ -466,13 +457,10 @@ void MyGame::RespawnNow()
 // ------------------------------------------------------------
 void MyGame::RenderMenu() const
 {
-    // Title
     App::Print(420, 520, "BUG SWARM");
 
-    // Start
     App::Print(340, 490, "Start:  Enter   or   Start");
 
-    // Keyboard section
     App::Print(340, 450, "Keyboard");
     App::Print(340, 430, "Move:   W A S D");
     App::Print(340, 410, "View:   V");
@@ -482,7 +470,6 @@ void MyGame::RenderMenu() const
     App::Print(340, 330, "Scale:  Left/Right Arrow");
     App::Print(340, 310, "Pause:  Esc");
 
-    // Controller section
     App::Print(580, 450, "Controller");
     App::Print(580, 430, "Move:   Left Stick");
     App::Print(580, 410, "View:   DPad Down");
@@ -499,12 +486,11 @@ void MyGame::RenderPauseOverlay() const
     App::Print(330, 490, "Resume:  Enter or Start");
     App::Print(330, 470, "Pause:   Esc   or Start");
 
-    // Keep it minimal but still show controls (same layout idea)
     App::Print(340, 430, "Keyboard");
     App::Print(340, 410, "Move:   W A S D");
     App::Print(340, 390, "View:   V");
     App::Print(340, 370, "Pulse:  Space");
-    App::Print(340, 350, "Slash:  Q");
+    App::Print(340, 350, "Slash:  F");
     App::Print(340, 330, "Meteor: E");
 
     App::Print(580, 430, "Controller");
