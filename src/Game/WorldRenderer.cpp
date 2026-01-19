@@ -1,4 +1,4 @@
-// WorldRenderer.cpp
+﻿// WorldRenderer.cpp
 #include "WorldRenderer.h"
 #include "GameConfig.h"
 
@@ -269,6 +269,9 @@ void WorldRenderer::RenderWorld(
         attacks.GetSlashCooldownMs(),
         attacks.GetMeteorCooldownMs()
     );
+
+    // ✅ NEW: Render tactical minimap in bottom-left corner
+    RenderTacticalMinimap(player, hives);
 }
 
 void WorldRenderer::RenderZombies2D(float offX, float offY, const ZombieSystem& zombies, bool densityView)
@@ -695,6 +698,126 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
         Rot(size * 0.5f, size * 0.8f, p1x, p1y); Rot(lx, ly, p2x, p2y);
         App::DrawLine(x + p1x, y + p1y, x + p2x, y + p2y, r, g, b);
     }
+}
+
+void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem& hives) const
+{
+    // ========== MINIMAP CONFIGURATION ==========
+    const float mapX = 20.0f;           // Bottom-left corner
+    const float mapY = 20.0f;
+    const float mapW = 180.0f;          // Minimap size
+    const float mapH = 180.0f;
+    const float worldSize = 2600.0f;    // World is -1300 to +1300
+    const float scale = mapW / worldSize;
+
+    // ========== SEMI-TRANSPARENT BACKGROUND ==========
+    // Draw multiple horizontal lines for fill effect
+    for (float y = mapY; y < mapY + mapH; y += 2.0f)
+    {
+        App::DrawLine(mapX, y, mapX + mapW, y, 0.0f, 0.0f, 0.0f);
+    }
+
+    // ========== BORDERS ==========
+    // Cyan glow border
+    App::DrawLine(mapX - 2, mapY - 2, mapX + mapW + 2, mapY - 2, 0.30f, 0.70f, 0.90f);
+    App::DrawLine(mapX + mapW + 2, mapY - 2, mapX + mapW + 2, mapY + mapH + 2, 0.30f, 0.70f, 0.90f);
+    App::DrawLine(mapX + mapW + 2, mapY + mapH + 2, mapX - 2, mapY + mapH + 2, 0.30f, 0.70f, 0.90f);
+    App::DrawLine(mapX - 2, mapY + mapH + 2, mapX - 2, mapY - 2, 0.30f, 0.70f, 0.90f);
+
+    // Main border (yellow)
+    DrawRectOutline(mapX, mapY, mapX + mapW, mapY + mapH, 1.0f, 0.95f, 0.20f);
+
+    // ========== COORDINATE CONVERSION ==========
+    const float centerX = mapX + mapW * 0.5f;
+    const float centerY = mapY + mapH * 0.5f;
+
+    auto WorldToMap = [&](float wx, float wy, float& mx, float& my)
+    {
+        mx = centerX + wx * scale;
+        my = centerY + wy * scale;
+    };
+
+    // ========== DRAW BOUNDARY WALLS ==========
+    const float bMin = GameConfig::BoundaryConfig::BOUNDARY_MIN;
+    const float bMax = GameConfig::BoundaryConfig::BOUNDARY_MAX;
+
+    float x1, y1, x2, y2;
+    WorldToMap(bMin, bMin, x1, y1);
+    WorldToMap(bMax, bMax, x2, y2);
+
+    const float wallAlpha = 0.4f;
+    DrawRectOutline(x1, y1, x2, y2, 
+        0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
+
+    // ========== DRAW HIVES ==========
+    const auto& hiveList = hives.GetHives();
+
+    for (const auto& h : hiveList)
+    {
+        float mx, my;
+        WorldToMap(h.x, h.y, mx, my);
+        const float r = h.radius * scale * 0.8f; // Slightly smaller for clarity
+
+        if (h.alive)
+        {
+            // Alive hive - yellow/orange circle (8 segments for performance)
+            const int segments = 8;
+            float prevX = mx + r;
+            float prevY = my;
+
+            for (int i = 1; i <= segments; i++)
+            {
+                const float angle = (GameConfig::MathConstants::TWO_PI * i) / segments;
+                const float x = mx + std::cos(angle) * r;
+                const float y = my + std::sin(angle) * r;
+                App::DrawLine(prevX, prevY, x, y, 1.0f, 0.85f, 0.10f);
+                prevX = x;
+                prevY = y;
+            }
+        }
+        else
+        {
+            // Destroyed hive - red X
+            const float xSize = r * 1.2f;
+            App::DrawLine(mx - xSize, my - xSize, mx + xSize, my + xSize, 0.8f, 0.1f, 0.1f);
+            App::DrawLine(mx + xSize, my - xSize, mx - xSize, my + xSize, 0.8f, 0.1f, 0.1f);
+        }
+    }
+
+    // ========== DRAW PLAYER CURSOR (GREEN) ==========
+    float px, py;
+    player.GetWorldPosition(px, py);
+    
+    float playerMapX, playerMapY;
+    WorldToMap(px, py, playerMapX, playerMapY);
+
+    // Draw green cursor as a plus sign
+    const float cursorSize = 4.0f;
+    
+    // Vertical line
+    App::DrawLine(playerMapX, playerMapY - cursorSize, playerMapX, playerMapY + cursorSize, 0.0f, 1.0f, 0.0f);
+    // Horizontal line
+    App::DrawLine(playerMapX - cursorSize, playerMapY, playerMapX + cursorSize, playerMapY, 0.0f, 1.0f, 0.0f);
+    
+    // Draw a small circle around the cursor for better visibility
+    const int cursorSegments = 8;
+    const float cursorRadius = 3.0f;
+    float prevX = playerMapX + cursorRadius;
+    float prevY = playerMapY;
+    
+    for (int i = 1; i <= cursorSegments; i++)
+    {
+        const float angle = (GameConfig::MathConstants::TWO_PI * i) / cursorSegments;
+        const float x = playerMapX + std::cos(angle) * cursorRadius;
+        const float y = playerMapY + std::sin(angle) * cursorRadius;
+        App::DrawLine(prevX, prevY, x, y, 0.0f, 1.0f, 0.0f);
+        prevX = x;
+        prevY = y;
+    }
+
+    // ========== LABEL ==========
+    App::Print(static_cast<int>(mapX), static_cast<int>(mapY + mapH + 5), 
+        "MAP", 0.30f, 0.70f, 0.90f, GLUT_BITMAP_HELVETICA_10);
 }
 
 float WorldRenderer::Clamp01(float v)

@@ -552,9 +552,112 @@ void MyGame::ResetRun()
 
 void MyGame::RenderWinOverlay() const
 {
-    App::Print(470, 520, "YOU WIN");
-    App::Print(280, 490, "Press Enter or Start to return to Menu");
-    App::Print(310, 460, "Destroy all nests to win again");
+    // ========== SCI-FI BACKGROUND (SAME AS MENU) ==========
+    static float winTime = 0.0f;
+    winTime += 0.016f;
+    if (winTime > 1000.0f) winTime = 0.0f;
+
+    // Scanlines
+    for (int y = 0; y < 768; y += 3)
+    {
+        const float intensity = (y % 6 == 0) ? 0.03f : 0.015f;
+        App::DrawLine(0.0f, static_cast<float>(y), 1024.0f, static_cast<float>(y),
+            0.02f + intensity, 0.03f + intensity, 0.05f + intensity);
+    }
+
+    // Animated grid
+    const float gridSize = 64.0f;
+    const float pulse = 0.02f + 0.01f * std::sin(winTime * 0.6f);
+
+    for (float x = 0.0f; x < 1024.0f; x += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(x / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(x, 0.0f, x, 768.0f, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    for (float y = 0.0f; y < 768.0f; y += gridSize)
+    {
+        const bool isMajor = (static_cast<int>(y / gridSize) % 4 == 0);
+        const float alpha = isMajor ? (0.08f + pulse) : 0.05f;
+        App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
+    }
+
+    // ========== VICTORY TITLE WITH GLOW ==========
+    const float blinkAlpha = std::sin(winTime * 2.0f) * 0.3f + 0.7f;
+    
+    // Shadow
+    App::Print(352, 552, "MISSION COMPLETE", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
+    // Glow
+    App::Print(350, 550, "MISSION COMPLETE", 
+        0.1f * blinkAlpha, 1.0f * blinkAlpha, 0.1f * blinkAlpha, GLUT_BITMAP_TIMES_ROMAN_24);
+
+    // ========== SUCCESS PANEL ==========
+    const float panelX = 312.0f;
+    const float panelY = 400.0f;
+
+    // Panel border (cyan glow)
+    App::DrawLine(panelX - 5, panelY - 5, panelX + 400, panelY - 5, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 400, panelY - 5, panelX + 400, panelY + 120, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX + 400, panelY + 120, panelX - 5, panelY + 120, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(panelX - 5, panelY + 120, panelX - 5, panelY - 5, 0.70f, 0.90f, 1.00f);
+
+    // Panel header
+    App::Print(420, 505, "MISSION SUMMARY", 1.0f, 0.55f, 0.10f);
+
+    // Victory stats
+    App::Print(327, 475, "STATUS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(400, 475, "ALL HIVES DESTROYED", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+
+    char finalHP[64];
+    snprintf(finalHP, sizeof(finalHP), "FINAL HP: %d / %d", player.GetHealth(), player.GetMaxHealth());
+    App::Print(327, 455, finalHP, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    char enemiesText[64];
+    snprintf(enemiesText, sizeof(enemiesText), "HOSTILES ELIMINATED: %d", 
+        GameConfig::SystemCapacity::MAX_ZOMBIES - zombies.AliveCount());
+    App::Print(327, 435, enemiesText, 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    App::Print(370, 410, "THREAT NEUTRALIZED", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== CONGRATULATIONS PANEL ==========
+    const float congratsX = 262.0f;
+    const float congratsY = 300.0f;
+
+    // Border
+    App::DrawLine(congratsX - 5, congratsY - 5, congratsX + 500, congratsY - 5, 0.10f, 1.00f, 0.10f);
+    App::DrawLine(congratsX + 500, congratsY - 5, congratsX + 500, congratsY + 70, 0.10f, 1.00f, 0.10f);
+    App::DrawLine(congratsX + 500, congratsY + 70, congratsX - 5, congratsY + 70, 0.10f, 1.00f, 0.10f);
+    App::DrawLine(congratsX - 5, congratsY + 70, congratsX - 5, congratsY - 5, 0.10f, 1.00f, 0.10f);
+
+    App::Print(370, 355, "EXCELLENT WORK, AGENT!", 1.0f, 0.95f, 0.20f);
+    App::Print(280, 330, "The swarm has been eradicated successfully", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(305, 310, "All hive structures have been neutralized", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+
+    // ========== RETURN PROMPT ==========
+    const float returnBlinkAlpha = std::sin(winTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
+    App::Print(280, 250, ">> PRESS ENTER OR START TO CONTINUE <<",
+        returnBlinkAlpha, returnBlinkAlpha * 0.95f, returnBlinkAlpha * 0.20f);
+
+    // ========== DECORATIVE ELEMENTS ==========
+    // Victory stars/sparkles
+    for (int i = 0; i < 8; i++)
+    {
+        const float sparkleTime = winTime + i * 0.5f;
+        const float sparkleAlpha = std::sin(sparkleTime * 3.0f) * 0.5f + 0.5f;
+        const float sparkleX = 200.0f + i * 80.0f;
+        const float sparkleY = 600.0f + std::sin(sparkleTime * 2.0f) * 20.0f;
+        
+        // Draw small cross/star
+        App::DrawLine(sparkleX - 3, sparkleY, sparkleX + 3, sparkleY, 
+            1.0f * sparkleAlpha, 0.95f * sparkleAlpha, 0.20f * sparkleAlpha);
+        App::DrawLine(sparkleX, sparkleY - 3, sparkleX, sparkleY + 3, 
+            1.0f * sparkleAlpha, 0.95f * sparkleAlpha, 0.20f * sparkleAlpha);
+    }
+
+    // ========== FOOTER ==========
+    App::Print(280, 30, "MISSION ACCOMPLISHED - RETURNING TO BASE",
+        0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
 }
 
 // ------------------------------------------------------------

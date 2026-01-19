@@ -1,4 +1,4 @@
-// WorldRenderer.h
+﻿// WorldRenderer.h
 #pragma once
 
 class CameraSystem;
@@ -45,6 +45,9 @@ private:
         float pulseCdMs, float slashCdMs, float meteorCdMs);
 
     void RenderKillPopupOverPlayer(float playerScreenX, float playerScreenY, float dtMs);
+
+    // ✅ NEW: Render live tactical minimap
+    void RenderTacticalMinimap(const Player& player, const HiveSystem& hives) const;
 
     void DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const;
 
