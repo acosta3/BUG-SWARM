@@ -10,7 +10,6 @@ struct AttackInput
     float aimY = 0.0f;
 };
 
-// VFX structs now pooled
 struct SlashFX
 {
     bool active = false;
@@ -46,7 +45,7 @@ struct MeteorFX
     float radius = 120.0f;
 };
 
-// ✅ NEW: Hive Explosion FX
+
 struct HiveExplosionFX
 {
     bool active = false;
@@ -77,7 +76,6 @@ public:
 
     void RenderFX(float camOffX, float camOffY) const;
 
-    // ✅ NEW: Trigger hive explosion
     void TriggerHiveExplosion(float x, float y, float hiveRadius, CameraSystem& camera);
 
     float GetPulseCooldownMs() const { return pulseCooldownMs; }
@@ -103,9 +101,9 @@ private:
     int lastSlashKills = 0;
     int lastMeteorKills = 0;
 
-    // OBJECT POOLS - AAA style!
+    
     ObjectPool<SlashFX, 16> slashFxPool;
     ObjectPool<PulseFX, 16> pulseFxPool;
     ObjectPool<MeteorFX, 16> meteorFxPool;
-    ObjectPool<HiveExplosionFX, 8> hiveExplosionPool; // ✅ NEW: Max 8 hive explosions
+    ObjectPool<HiveExplosionFX, 8> hiveExplosionPool; 
 };

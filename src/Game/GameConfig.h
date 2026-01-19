@@ -20,11 +20,10 @@ namespace GameConfig
     };
 
 
-    // Mathematical Constants - Shared across all systems
-    // Note: PI is already defined in AppSettings.h as a macro
+  
     struct MathConstants
     {
-        // Use the API's PI definition (defined in AppSettings.h)
+        
         static constexpr float TWO_PI = 6.28318530718f;
         static constexpr float EPSILON = 0.0001f;
     };

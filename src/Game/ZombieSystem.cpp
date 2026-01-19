@@ -1,4 +1,4 @@
-﻿// ZombieSystem.cpp - AAA Quality Version with Spatial Grid Optimizations
+﻿// ZombieSystem.cpp
 #include "ZombieSystem.h"
 #include "NavGrid.h"
 #include "GameConfig.h"
@@ -10,7 +10,6 @@
 
 using namespace GameConfig;
 
-// -------------------- Utilities --------------------
 namespace
 {
     float Rand01()
@@ -35,7 +34,6 @@ namespace
     }
 }
 
-// -------------------- Collision Resolution --------------------
 bool ZombieSystem::PopOutIfStuck(float& x, float& y, float radius, const NavGrid& nav) const
 {
     if (!nav.IsCircleBlocked(x, y, radius))
@@ -109,7 +107,6 @@ bool ZombieSystem::ResolveMoveSlide(float& x, float& y, float vx, float vy, floa
     return false;
 }
 
-// -------------------- Kill Tracking --------------------
 void ZombieSystem::BeginFrame()
 {
     killsThisFrame = 0;
@@ -123,7 +120,6 @@ int ZombieSystem::ConsumeKillsThisFrame()
     return k;
 }
 
-// -------------------- Initialization --------------------
 void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
 {
     maxCount = maxZombies;
@@ -149,8 +145,7 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     worldMaxX = nav.WorldMaxX();
     worldMaxY = nav.WorldMaxY();
 
-    // ✅ OPTIMIZATION #4: Larger cell size (matches separation radius)
-    cellSize = tuning.sepRadius * 2.0f;  // ~36-40 pixels instead of 40
+    cellSize = tuning.sepRadius * 2.0f;
 
     gridW = static_cast<int>((worldMaxX - worldMinX) / cellSize) + 1;
     gridH = static_cast<int>((worldMaxY - worldMinY) / cellSize) + 1;
@@ -160,7 +155,6 @@ void ZombieSystem::Init(int maxZombies, const NavGrid& nav)
     cellCount.assign(totalCells, 0);
     cellList.assign(maxCount, 0);
 
-    // ✅ OPTIMIZATION #3: Pre-allocate nearList
     nearList.reserve(maxCount);
 
     killsThisFrame = 0;
@@ -176,7 +170,6 @@ void ZombieSystem::Clear()
     gridDirty = true;
 }
 
-// -------------------- Spawning --------------------
 bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
 {
     if (aliveCount >= maxCount)
@@ -196,7 +189,7 @@ bool ZombieSystem::SpawnAtWorld(float x, float y, uint8_t forcedType)
     hp[i] = typeStats[t].maxHP;
     flowAssistMs[i] = 0.0f;
 
-    gridDirty = true;  // ✅ Mark grid as needing rebuild
+    gridDirty = true;
     return true;
 }
 
@@ -225,10 +218,9 @@ void ZombieSystem::Spawn(int count, float playerX, float playerY)
         flowAssistMs[i] = 0.0f;
     }
 
-    gridDirty = true;  // ✅ Mark grid as needing rebuild
+    gridDirty = true;
 }
 
-// -------------------- Type Configuration --------------------
 void ZombieSystem::InitTypeStats()
 {
     using ZC = GameConfig::ZombieConfig;
@@ -288,7 +280,6 @@ uint8_t ZombieSystem::RollTypeWeighted() const
     return PURPLE_ELITE;
 }
 
-// -------------------- Removal --------------------
 void ZombieSystem::KillSwapRemove(int index)
 {
     const int last = aliveCount - 1;
@@ -308,7 +299,7 @@ void ZombieSystem::KillSwapRemove(int index)
     }
 
     aliveCount--;
-    gridDirty = true;  // ✅ Mark grid as needing rebuild
+    gridDirty = true;
 }
 
 void ZombieSystem::Despawn(int index)
@@ -322,7 +313,6 @@ void ZombieSystem::KillByPlayer(int index)
     KillSwapRemove(index);
 }
 
-// -------------------- Spatial Grid --------------------
 int ZombieSystem::CellIndex(float x, float y) const
 {
     int cx = static_cast<int>((x - worldMinX) / cellSize);
@@ -334,7 +324,6 @@ int ZombieSystem::CellIndex(float x, float y) const
     return cy * gridW + cx;
 }
 
-// ✅ OPTIMIZATION #1 + #2: Optimized grid builder
 void ZombieSystem::BuildSpatialGrid(float playerX, float playerY)
 {
     const float sepActiveRadiusSq = tuning.sepActiveRadius * tuning.sepActiveRadius;
@@ -385,7 +374,6 @@ void ZombieSystem::BuildSpatialGrid(float playerX, float playerY)
     cellStart[0] = 0;
 }
 
-// -------------------- Per-Frame Helpers --------------------
 void ZombieSystem::TickTimers(int i, float deltaTimeMs)
 {
     if (fearTimerMs[i] > 0.0f)
@@ -453,7 +441,6 @@ void ZombieSystem::ApplyFlowAssistIfActive(int i, const NavGrid& nav, float& ioD
     NormalizeSafe(ioDX, ioDY);
 }
 
-// ✅ OPTIMIZATION #5: Optimized separation with early-out
 void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) const
 {
     outSepX = 0.0f;
@@ -544,7 +531,6 @@ void ZombieSystem::ComputeSeparation(int i, float& outSepX, float& outSepY) cons
     outSepY = totalSepY;
 }
 
-// -------------------- Lightweight Update --------------------
 void ZombieSystem::LightweightUpdate(float deltaTimeMs)
 {
     const float dt = std::min(deltaTimeMs, ZombieConfig::MAX_DELTA_TIME_MS) / 1000.0f;
@@ -561,7 +547,6 @@ void ZombieSystem::LightweightUpdate(float deltaTimeMs)
     }
 }
 
-// -------------------- Main Update --------------------
 int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const NavGrid& nav)
 {
     deltaTimeMs = std::min(deltaTimeMs, ZombieConfig::MAX_DELTA_TIME_MS);
@@ -588,7 +573,6 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     static uint32_t frameCounter = 0;
     frameCounter++;
 
-    // ✅ OPTIMIZATION #1: Only rebuild grid periodically
     gridRebuildTimerMs += deltaTimeMs;
     if (gridRebuildTimerMs >= GRID_REBUILD_INTERVAL_MS || gridDirty)
     {
@@ -732,7 +716,6 @@ int ZombieSystem::Update(float deltaTimeMs, float playerX, float playerY, const 
     return damageThisFrame;
 }
 
-// -------------------- Fear & Counts --------------------
 void ZombieSystem::TriggerFear(float sourceX, float sourceY, float radius, float durationMs)
 {
     const float r2 = radius * radius;
@@ -775,7 +758,6 @@ void ZombieSystem::GetTypeCounts(int& g, int& r, int& b, int& p) const
     }
 }
 
-// -------------------- Utility Methods --------------------
 float ZombieSystem::Clamp01(float v)
 {
     return std::clamp(v, 0.0f, 1.0f);

@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstdint>
 
-// High-performance object pool with O(1) acquire/release
 template<typename T, int MaxSize>
 class ObjectPool
 {
@@ -23,7 +22,7 @@ public:
         }
     }
 
-    // O(1) Acquire - AAA performance!
+   
     T* Acquire()
     {
         if (freeList.empty())
@@ -39,7 +38,7 @@ public:
         return &objects[index];
     }
 
-    // O(1) Release - AAA performance!
+    
     void Release(T* obj)
     {
         if (!obj) return;
@@ -108,7 +107,7 @@ public:
     }
 
 private:
-    std::vector<T> objects;              // Pre-allocated objects
-    std::vector<uint8_t> activeFlags;    // ✅ FIXED: uint8_t instead of bool (cache-friendly!)
-    std::vector<int> freeList;           // O(1) free object tracking
+    std::vector<T> objects;              
+    std::vector<uint8_t> activeFlags;    
+    std::vector<int> freeList;           
 };

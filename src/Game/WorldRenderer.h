@@ -46,7 +46,6 @@ private:
 
     void RenderKillPopupOverPlayer(float playerScreenX, float playerScreenY, float dtMs);
 
-    // ✅ NEW: Render live tactical minimap
     void RenderTacticalMinimap(const Player& player, const HiveSystem& hives) const;
 
     void DrawRectOutline(float x0, float y0, float x1, float y1, float r, float g, float b) const;
@@ -60,9 +59,8 @@ private:
     static float Clamp01(float v);
 
 private:
-    int   killPopupCount = 0;
-    float killPopupTimeMs = 0.0f;
+int   killPopupCount = 0;
+float killPopupTimeMs = 0.0f;
 
-    // NEW: global render time for wiggle
-    float animTimeSec = 0.0f;
+float animTimeSec = 0.0f;
 };

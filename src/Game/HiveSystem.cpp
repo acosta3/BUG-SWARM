@@ -1,10 +1,10 @@
-﻿// HiveSystem.cpp - AAA Quality Version
+﻿
 #include "HiveSystem.h"
 #include "GameConfig.h"
 #include "ZombieSystem.h"
 #include "NavGrid.h"
-#include "AttackSystem.h"  // ✅ NEW: Include for explosion trigger
-#include "CameraSystem.h"   // ✅ NEW: Include for camera reference
+#include "AttackSystem.h"  
+#include "CameraSystem.h"   
 #include "../ContestAPI/app.h"
 
 #include <cmath>
@@ -13,13 +13,12 @@
 
 using namespace GameConfig;
 
-// -------------------- Module State --------------------
+
 namespace
 {
     float gHiveAnimTimeSec = 0.0f;
 }
 
-// -------------------- Utilities --------------------
 namespace
 {
     float Rand01()
@@ -39,8 +38,6 @@ namespace
         return dx * dx + dy * dy;
     }
 }
-
-// -------------------- Rendering Helpers --------------------
 namespace
 {
     void DrawCircleLines(float cx, float cy, float r, float red, float green, float blue)
@@ -106,7 +103,7 @@ namespace
     }
 }
 
-// -------------------- Initialization --------------------
+
 void HiveSystem::Init()
 {
     hives.clear();
@@ -190,7 +187,6 @@ void HiveSystem::AddHive(float x, float y, float radius, float hp)
     hives.push_back(h);
 }
 
-// -------------------- State Queries --------------------
 int HiveSystem::AliveCount() const
 {
     int count = 0;
@@ -202,7 +198,6 @@ int HiveSystem::AliveCount() const
     return count;
 }
 
-// -------------------- Update --------------------
 void HiveSystem::Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid& nav)
 {
     const float dt = deltaTimeMs * HiveConfig::MS_TO_SEC;
@@ -267,8 +262,6 @@ void HiveSystem::Update(float deltaTimeMs, ZombieSystem& zombies, const NavGrid&
         }
     }
 }
-
-// -------------------- Combat --------------------
 bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage, 
                                AttackSystem* attacks, CameraSystem* camera)
 {
@@ -305,7 +298,7 @@ bool HiveSystem::DamageHiveAt(float wx, float wy, float hitRadius, float damage,
     return hitAny;
 }
 
-// -------------------- Rendering --------------------
+
 void HiveSystem::Render(float camOffX, float camOffY) const
 {
     const float time = gHiveAnimTimeSec;

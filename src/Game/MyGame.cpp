@@ -31,18 +31,15 @@ void MyGame::Update(float dtMs)
 {
     lastDtMs = dtMs;
 
-    // IMPORTANT: Update input ONCE per frame
     input.SetEnabled(true);
     input.Update(dtMs);
 
     const InputState& in = input.GetState();
 
-    // Handle any "global" input that just reads state (no re-update)
+
     UpdateInput(dtMs);
 
-    // -----------------------------
-    // Menu
-    // -----------------------------
+
     if (mode == GameMode::Menu)
     {
         if (in.startPressed)
@@ -59,9 +56,7 @@ void MyGame::Update(float dtMs)
         return;
     }
 
-    // -----------------------------
-    // Win screen
-    // -----------------------------
+
     if (mode == GameMode::Win)
     {
         float px = 0.0f, py = 0.0f;
@@ -76,9 +71,6 @@ void MyGame::Update(float dtMs)
         return;
     }
 
-    // -----------------------------
-    // Pause toggle (only when not in menu)
-    // -----------------------------
     if (in.pausePressed)
     {
         if (mode == GameMode::Playing)
@@ -94,7 +86,6 @@ void MyGame::Update(float dtMs)
         }
     }
 
-    // If paused, do not simulate gameplay
     if (mode == GameMode::Paused)
         return;
 
@@ -103,9 +94,7 @@ void MyGame::Update(float dtMs)
     float px = 0.0f, py = 0.0f;
     player.GetWorldPosition(px, py);
 
-    // -----------------------------
-    // Life-state handling first - using config constants
-    // -----------------------------
+
     if (life != LifeState::Playing)
     {
         lifeTimerMs += dtMs;
@@ -139,9 +128,7 @@ void MyGame::Update(float dtMs)
         return;
     }
 
-    // -----------------------------
-    // Normal gameplay
-    // -----------------------------
+
     UpdatePlayer(dtMs);
     hives.Update(dtMs, zombies, nav);
 
@@ -160,9 +147,6 @@ void MyGame::Update(float dtMs)
         return;
     }
 
-    // -----------------------------
-    // WIN CONDITION: all hives dead
-    // -----------------------------
     if (hives.AliveCount() == 0)
     {
         BeginWin();
@@ -195,9 +179,7 @@ void MyGame::Shutdown()
     // Nothing required right now
 }
 
-// ------------------------------------------------------------
-// Init - now using GameConfig constants
-// ------------------------------------------------------------
+// Initialization
 void MyGame::InitWorld()
 {
     player.Init();
@@ -210,7 +192,6 @@ void MyGame::InitWorld()
 
     player.SetNavGrid(&nav);
 
-    // Using GameConfig constants instead of hardcoded values
     camera.Init(GameTuning::SCREEN_WIDTH, GameTuning::SCREEN_HEIGHT);
     camera.Follow(px, py);
 
@@ -227,7 +208,6 @@ void MyGame::InitWorld()
 
 void MyGame::InitObstacles()
 {
-    // Using GameConfig constants
     const float spread = GameTuning::OBSTACLE_SPREAD;
     const float half = GameTuning::OBSTACLE_HALF_SIZE;
 
@@ -287,8 +267,6 @@ void MyGame::InitObstacles()
     AddBlock(-120.0f, 90.0f);
     AddBlock(-320.0f, -40.0f);
     AddBlock(-320.0f, 90.0f);
-
-    //nav.ClearObstacles(); // delete after 
 }
 
 void MyGame::InitSystems()
@@ -336,9 +314,7 @@ void MyGame::InitSystems()
     lastDtMs = GameTuning::DEFAULT_DT_MS;
 }
 
-// ------------------------------------------------------------
-// Update helpers - using GameConfig constants
-// ------------------------------------------------------------
+// Update helpers
 bool MyGame::InputLocked() const
 {
     return (life != LifeState::Playing);
@@ -415,7 +391,6 @@ void MyGame::UpdateAttacks(float dtMs)
     const int kills = attacks.GetLastSlashKills();
     if (kills > 0)
     {
-        // Using GameConfig constant instead of hardcoded 1.5f
         player.Heal(kills * GameTuning::HEAL_PER_KILL);
         PlayRandomSquish();
     }
@@ -450,9 +425,7 @@ void MyGame::UpdateZombies(float dtMs, float playerX, float playerY)
         player.TakeDamage(dmg);
 }
 
-// ------------------------------------------------------------
-// Death / respawn - using GameConfig constants
-// ------------------------------------------------------------
+// Death and respawn
 void MyGame::BeginDeath(float playerX, float playerY)
 {
     life = LifeState::DeathPause;
@@ -480,9 +453,7 @@ void MyGame::RespawnNow()
     player.SetMoveInput(0.0f, 0.0f);
 }
 
-// ------------------------------------------------------------
-// Win + restart - using GameConfig constants
-// ------------------------------------------------------------
+// Win and restart
 void MyGame::BeginWin()
 {
     mode = GameMode::Win;
@@ -495,7 +466,6 @@ void MyGame::ResetRun()
     nav.ClearObstacles();
     InitObstacles();
 
-    // Reset player - using GameConfig constants
     player.Revive(true);
     player.GiveInvulnerability(GameTuning::INVULNERABILITY_RESET_MS);
     player.SetWorldPosition(respawnX, respawnY);
@@ -552,7 +522,7 @@ void MyGame::ResetRun()
 
 void MyGame::RenderWinOverlay() const
 {
-    // ========== SCI-FI BACKGROUND (SAME AS MENU) ==========
+    
     static float winTime = 0.0f;
     winTime += 0.016f;
     if (winTime > 1000.0f) winTime = 0.0f;
@@ -583,7 +553,6 @@ void MyGame::RenderWinOverlay() const
         App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    // ========== VICTORY TITLE WITH GLOW ==========
     const float blinkAlpha = std::sin(winTime * 2.0f) * 0.3f + 0.7f;
     
     // Shadow
@@ -592,7 +561,6 @@ void MyGame::RenderWinOverlay() const
     App::Print(350, 550, "MISSION COMPLETE", 
         0.1f * blinkAlpha, 1.0f * blinkAlpha, 0.1f * blinkAlpha, GLUT_BITMAP_TIMES_ROMAN_24);
 
-    // ========== SUCCESS PANEL ==========
     const float panelX = 312.0f;
     const float panelY = 400.0f;
 
@@ -620,7 +588,7 @@ void MyGame::RenderWinOverlay() const
 
     App::Print(370, 410, "THREAT NEUTRALIZED", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== CONGRATULATIONS PANEL ==========
+
     const float congratsX = 262.0f;
     const float congratsY = 300.0f;
 
@@ -634,12 +602,12 @@ void MyGame::RenderWinOverlay() const
     App::Print(280, 330, "The swarm has been eradicated successfully", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
     App::Print(305, 310, "All hive structures have been neutralized", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== RETURN PROMPT ==========
+
     const float returnBlinkAlpha = std::sin(winTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
     App::Print(280, 250, ">> PRESS ENTER OR START TO CONTINUE <<",
         returnBlinkAlpha, returnBlinkAlpha * 0.95f, returnBlinkAlpha * 0.20f);
 
-    // ========== DECORATIVE ELEMENTS ==========
+    
     // Victory stars/sparkles
     for (int i = 0; i < 8; i++)
     {
@@ -655,18 +623,16 @@ void MyGame::RenderWinOverlay() const
             1.0f * sparkleAlpha, 0.95f * sparkleAlpha, 0.20f * sparkleAlpha);
     }
 
-    // ========== FOOTER ==========
+  
     App::Print(280, 30, "MISSION ACCOMPLISHED - RETURNING TO BASE",
         0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
 }
 
-// ------------------------------------------------------------
-// Menu and Pause UI (unchanged - these are UI layout constants)
-// ------------------------------------------------------------
+// UI Rendering
 
 void MyGame::RenderMenu() const
 {
-    // ========== SCI-FI BACKGROUND ==========
+   
     static float menuTime = 0.0f;
     menuTime += 0.016f;
     if (menuTime > 1000.0f) menuTime = 0.0f;
@@ -697,12 +663,12 @@ void MyGame::RenderMenu() const
         App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    // ========== TITLE ==========
+   
     App::Print(387, 702, "BUG SWARM", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(385, 700, "BUG SWARM", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(280, 670, "TACTICAL ERADICATION PROTOCOL", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== MAP PREVIEW ==========
+
     const float mapX = 80.0f;
     const float mapY = 380.0f;
     const float mapW = 240.0f;
@@ -784,7 +750,7 @@ void MyGame::RenderMenu() const
 
     App::Print(80, 365, "3 HIVES DETECTED", 1.0f, 0.55f, 0.10f, GLUT_BITMAP_HELVETICA_10);
 
-    // ========== MISSION BRIEFING - BETTER CENTERED ==========
+  
     const float panelX = 370.0f;
     const float panelY = 475.0f;
 
@@ -800,12 +766,12 @@ void MyGame::RenderMenu() const
     App::Print(380, 502, "Enemies: 100,000 bugs", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
     App::Print(435, 482, "STATUS: READY", 0.10f, 1.00f, 0.10f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== START PROMPT ==========
+
     const float blinkAlpha = std::sin(menuTime * 4.0f) > 0.0f ? 1.0f : 0.3f;
     App::Print(320, 330, ">> PRESS ENTER OR START TO BEGIN <<",
         blinkAlpha, blinkAlpha * 0.95f, blinkAlpha * 0.20f);
 
-    // ========== CONTROLS ==========
+    
     App::Print(80, 310, "KEYBOARD CONTROLS", 0.70f, 0.90f, 1.00f);
     App::Print(80, 285, "Move:   W A S D", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 265, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
@@ -822,7 +788,7 @@ void MyGame::RenderMenu() const
     App::Print(700, 205, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(700, 185, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
 
-    // ========== FOOTER ==========
+    
     App::Print(260, 30, "CLASSIFIED - AUTHORIZATION LEVEL ALPHA REQUIRED",
         0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
     
@@ -830,7 +796,7 @@ void MyGame::RenderMenu() const
 
 void MyGame::RenderPauseOverlay() const
 {
-    // ========== SCI-FI BACKGROUND (SAME AS MENU) ==========
+
     static float pauseTime = 0.0f;
     pauseTime += 0.016f;
     if (pauseTime > 1000.0f) pauseTime = 0.0f;
@@ -861,12 +827,12 @@ void MyGame::RenderPauseOverlay() const
         App::DrawLine(0.0f, y, 1024.0f, y, alpha, alpha + 0.01f, alpha + 0.03f);
     }
 
-    // ========== TITLE ==========
+    
     App::Print(437, 702, "PAUSED", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(435, 700, "PAUSED", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(340, 670, "MISSION SUSPENDED", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== MISSION STATUS PANEL (CENTERED) ==========
+
     const float panelX = 365.0f;
     const float panelY = 475.0f;
 
@@ -900,11 +866,9 @@ void MyGame::RenderPauseOverlay() const
     App::Print(427, 482, "STATUS: PAUSED",
         blinkAlpha * 0.10f, blinkAlpha * 1.00f, blinkAlpha * 0.10f, GLUT_BITMAP_HELVETICA_12);
 
-    // ========== RESUME PROMPT ==========
     App::Print(305, 410, ">> PRESS ESC OR START TO RESUME <<",
         blinkAlpha, blinkAlpha * 0.95f, blinkAlpha * 0.20f);
 
-    // ========== CONTROLS ==========
     App::Print(220, 340, "KEYBOARD CONTROLS", 0.70f, 0.90f, 1.00f);
     App::Print(220, 315, "Move:   W A S D", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 295, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
@@ -921,7 +885,7 @@ void MyGame::RenderPauseOverlay() const
     App::Print(560, 235, "Scale:  LB/RB", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(560, 215, "View:   DPad Down", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
 
-    // ========== FOOTER ==========
+
     App::Print(300, 30, "MISSION PAUSED - AWAITING ORDERS",
         0.5f, 0.5f, 0.5f, GLUT_BITMAP_HELVETICA_10);
 }

@@ -1,4 +1,4 @@
-﻿// ZombieSystem.h - AAA Quality Version
+﻿// ZombieSystem.h
 #pragma once
 #include <vector>
 #include <cstdint>
@@ -123,7 +123,7 @@ private:
 
     // Spatial grid helpers
     int CellIndex(float x, float y) const;
-    void BuildSpatialGrid(float playerX, float playerY);  // ✅ NEW: Optimized grid builder
+    void BuildSpatialGrid(float playerX, float playerY);
 
     // Per-frame update helpers
     void TickTimers(int i, float deltaTimeMs);
@@ -173,25 +173,23 @@ private:
     ZombieTypeStats typeStats[ZTYPE_COUNT];
 
 private:
-    // ✅ OPTIMIZATION: Spatial grid improvements
-    float cellSize = 40.0f;
-    int gridW = 0;
-    int gridH = 0;
+float cellSize = 40.0f;
+int gridW = 0;
+int gridH = 0;
 
-    float worldMinX = -5000.0f;
-    float worldMinY = -5000.0f;
-    float worldMaxX = 5000.0f;
-    float worldMaxY = 5000.0f;
+float worldMinX = -5000.0f;
+float worldMinY = -5000.0f;
+float worldMaxX = 5000.0f;
+float worldMaxY = 5000.0f;
 
-    std::vector<int> cellStart;   // Prefix sum array (size = gridW*gridH + 1)
-    std::vector<int> cellCount;   // Count per cell (size = gridW*gridH)
-    std::vector<int> cellList;    // Zombie indices sorted by cell (size = maxCount)
+std::vector<int> cellStart;
+std::vector<int> cellCount;
+std::vector<int> cellList;
 
-    // ✅ NEW: Grid optimization members
-    std::vector<int> nearList;              // Pre-allocated near zombie list
-    bool gridDirty = true;                  // Flag to rebuild grid
-    float gridRebuildTimerMs = 0.0f;        // Timer for periodic rebuild
-    static constexpr float GRID_REBUILD_INTERVAL_MS = 50.0f;  // Rebuild every 50ms
+std::vector<int> nearList;
+bool gridDirty = true;
+float gridRebuildTimerMs = 0.0f;
+static constexpr float GRID_REBUILD_INTERVAL_MS = 50.0f;
 
 private:
     // Kill tracking

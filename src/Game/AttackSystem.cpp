@@ -21,7 +21,6 @@ static float Lerp(float a, float b, float t)
     return a + (b - a) * t;
 }
 
-// Scale-based damage/radius multipliers using centralized config
 static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMult)
 {
     if (s <= GameConfig::AttackConfig::SMALL_SCALE)
@@ -53,7 +52,6 @@ static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMul
     }
 }
 
-// ------------------- shared tuning -------------------
 struct SlashParams { float range; float cosHalfAngle; };
 static SlashParams GetSlashParams(float radMult)
 {
@@ -80,7 +78,6 @@ static MeteorParams GetMeteorParams(float radMult)
     return p;
 }
 
-// ------------------- draw helper (circle made of lines) -------------------
 static void DrawCircleLinesApprox(float cx, float cy, float r, float cr, float cg, float cb, int segments = GameConfig::AttackConfig::CIRCLE_SEGMENTS_LOW)
 {
     if (segments < 8) segments = 8;
@@ -124,7 +121,6 @@ void AttackSystem::Update(float deltaTimeMs)
     TickCooldown(slashCooldownMs, deltaTimeMs);
     TickCooldown(meteorCooldownMs, deltaTimeMs);
 
-    // ✅ OPTIMIZED: Use ForEach instead of manual loop checking all slots
     slashFxPool.ForEach([deltaTimeMs, this](SlashFX* fx) {
         if (fx && fx->active)
         {
@@ -161,7 +157,6 @@ void AttackSystem::Update(float deltaTimeMs)
         }
         });
 
-    // ✅ NEW: Update hive explosions
     hiveExplosionPool.ForEach([deltaTimeMs, this](HiveExplosionFX* fx) {
         if (fx && fx->active)
         {
@@ -464,16 +459,12 @@ void AttackSystem::TriggerHiveExplosion(float x, float y, float hiveRadius, Came
         fx->baseRadius = hiveRadius;
     }
 
-    // Big camera shake for hive destruction
     camera.AddShake(15.0f, 0.3f);
-
-    // Play explosion sound
     App::PlayAudio(GameConfig::AttackConfig::METEOR_SOUND, false);
 }
 
 void AttackSystem::RenderFX(float camOffX, float camOffY) const
 {
-    // ✅ OPTIMIZED: Use ForEach for rendering
     slashFxPool.ForEach([&](const SlashFX* fx) {
         if (!fx->active) return;
 
@@ -563,7 +554,6 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_INNER_RADIUS_MULT, 1.00f * t, 0.15f * t, 0.02f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         });
 
-    // ✅ NEW: Render hive explosions
     hiveExplosionPool.ForEach([&](const HiveExplosionFX* fx) {
         if (!fx->active) return;
 
@@ -577,7 +567,6 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
 
         const float maxRadius = fx->baseRadius * GameConfig::HiveConfig::EXPLOSION_MAX_RADIUS_MULT;
 
-        // Draw expanding explosion rings
         const int ringCount = static_cast<int>(GameConfig::HiveConfig::EXPLOSION_RINGS);
         for (int i = 0; i < ringCount; i++)
         {
@@ -594,7 +583,6 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
             DrawCircleLinesApprox(sx, sy, radius, r, g, b, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         }
 
-        // Draw debris particles flying outward
         const int debrisCount = static_cast<int>(GameConfig::HiveConfig::DEBRIS_COUNT);
         for (int i = 0; i < debrisCount; i++)
         {
@@ -615,7 +603,6 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
                 sx + dx - size, sy + dy + size, r, g, b);
         }
 
-        // Draw central flash
         if (t < 0.2f)
         {
             const float flashT = t / 0.2f;

@@ -270,7 +270,6 @@ void WorldRenderer::RenderWorld(
         attacks.GetMeteorCooldownMs()
     );
 
-    // ✅ NEW: Render tactical minimap in bottom-left corner
     RenderTacticalMinimap(player, hives);
 }
 
@@ -702,32 +701,25 @@ void WorldRenderer::DrawZombieTri(float x, float y, float size, float angleRad, 
 
 void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem& hives) const
 {
-    // ========== MINIMAP CONFIGURATION ==========
-    const float mapX = 20.0f;           // Bottom-left corner
+    const float mapX = 20.0f;
     const float mapY = 20.0f;
-    const float mapW = 180.0f;          // Minimap size
+    const float mapW = 180.0f;
     const float mapH = 180.0f;
-    const float worldSize = 2600.0f;    // World is -1300 to +1300
+    const float worldSize = 2600.0f;
     const float scale = mapW / worldSize;
 
-    // ========== SEMI-TRANSPARENT BACKGROUND ==========
-    // Draw multiple horizontal lines for fill effect
     for (float y = mapY; y < mapY + mapH; y += 2.0f)
     {
         App::DrawLine(mapX, y, mapX + mapW, y, 0.0f, 0.0f, 0.0f);
     }
 
-    // ========== BORDERS ==========
-    // Cyan glow border
     App::DrawLine(mapX - 2, mapY - 2, mapX + mapW + 2, mapY - 2, 0.30f, 0.70f, 0.90f);
     App::DrawLine(mapX + mapW + 2, mapY - 2, mapX + mapW + 2, mapY + mapH + 2, 0.30f, 0.70f, 0.90f);
     App::DrawLine(mapX + mapW + 2, mapY + mapH + 2, mapX - 2, mapY + mapH + 2, 0.30f, 0.70f, 0.90f);
     App::DrawLine(mapX - 2, mapY + mapH + 2, mapX - 2, mapY - 2, 0.30f, 0.70f, 0.90f);
 
-    // Main border (yellow)
     DrawRectOutline(mapX, mapY, mapX + mapW, mapY + mapH, 1.0f, 0.95f, 0.20f);
 
-    // ========== COORDINATE CONVERSION ==========
     const float centerX = mapX + mapW * 0.5f;
     const float centerY = mapY + mapH * 0.5f;
 
@@ -737,7 +729,6 @@ void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem
         my = centerY + wy * scale;
     };
 
-    // ========== DRAW BOUNDARY WALLS ==========
     const float bMin = GameConfig::BoundaryConfig::BOUNDARY_MIN;
     const float bMax = GameConfig::BoundaryConfig::BOUNDARY_MAX;
 
@@ -749,18 +740,16 @@ void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem
     DrawRectOutline(x1, y1, x2, y2, 
         0.65f * wallAlpha, 0.55f * wallAlpha, 0.15f * wallAlpha);
 
-    // ========== DRAW HIVES ==========
     const auto& hiveList = hives.GetHives();
 
     for (const auto& h : hiveList)
     {
         float mx, my;
         WorldToMap(h.x, h.y, mx, my);
-        const float r = h.radius * scale * 0.8f; // Slightly smaller for clarity
+        const float r = h.radius * scale * 0.8f;
 
         if (h.alive)
         {
-            // Alive hive - yellow/orange circle (8 segments for performance)
             const int segments = 8;
             float prevX = mx + r;
             float prevY = my;
@@ -777,29 +766,23 @@ void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem
         }
         else
         {
-            // Destroyed hive - red X
             const float xSize = r * 1.2f;
             App::DrawLine(mx - xSize, my - xSize, mx + xSize, my + xSize, 0.8f, 0.1f, 0.1f);
             App::DrawLine(mx + xSize, my - xSize, mx - xSize, my + xSize, 0.8f, 0.1f, 0.1f);
         }
     }
 
-    // ========== DRAW PLAYER CURSOR (GREEN) ==========
     float px, py;
     player.GetWorldPosition(px, py);
     
     float playerMapX, playerMapY;
     WorldToMap(px, py, playerMapX, playerMapY);
 
-    // Draw green cursor as a plus sign
     const float cursorSize = 4.0f;
     
-    // Vertical line
     App::DrawLine(playerMapX, playerMapY - cursorSize, playerMapX, playerMapY + cursorSize, 0.0f, 1.0f, 0.0f);
-    // Horizontal line
     App::DrawLine(playerMapX - cursorSize, playerMapY, playerMapX + cursorSize, playerMapY, 0.0f, 1.0f, 0.0f);
     
-    // Draw a small circle around the cursor for better visibility
     const int cursorSegments = 8;
     const float cursorRadius = 3.0f;
     float prevX = playerMapX + cursorRadius;
@@ -815,7 +798,6 @@ void WorldRenderer::RenderTacticalMinimap(const Player& player, const HiveSystem
         prevY = y;
     }
 
-    // ========== LABEL ==========
     App::Print(static_cast<int>(mapX), static_cast<int>(mapY + mapH + 5), 
         "MAP", 0.30f, 0.70f, 0.90f, GLUT_BITMAP_HELVETICA_10);
 }

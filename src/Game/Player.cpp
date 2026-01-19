@@ -1,4 +1,4 @@
-﻿// Player.cpp - AAA Quality Version
+﻿// Player.cpp
 #include "Player.h"
 #include "NavGrid.h"
 #include "GameConfig.h"
@@ -8,12 +8,11 @@
 
 using namespace GameConfig;
 
-// -------------------- Utilities --------------------
 namespace
 {
     float Clamp01(float v)
     {
-        return std::clamp(v, 0.0f, 1.0f);  // ✅ FIXED: Was ".0f" instead of "1.0f"
+        return std::clamp(v, 0.0f, 1.0f);
     }
 
     float Lerp(float a, float b, float t)
@@ -22,7 +21,6 @@ namespace
     }
 }
 
-// -------------------- Initialization --------------------
 void Player::Init()
 {
     sprite.reset(App::CreateSprite(
@@ -51,7 +49,6 @@ void Player::Init()
     RecomputeStatsFromScale(sprite->GetScale());
 }
 
-// -------------------- Position --------------------
 float Player::GetScale() const
 {
     if (!sprite)
@@ -77,7 +74,6 @@ void Player::GetWorldPosition(float& outX, float& outY) const
     sprite->GetPosition(outX, outY);
 }
 
-// -------------------- Health & Combat --------------------
 void Player::Revive(bool fullHeal)
 {
     dead = false;
@@ -125,7 +121,6 @@ void Player::TakeDamage(int amount)
     }
 }
 
-// -------------------- Update --------------------
 void Player::Update(float deltaTime)
 {
     if (!sprite)
@@ -226,7 +221,6 @@ void Player::Update(float deltaTime)
     wasMovingLastFrame = false;
 }
 
-// -------------------- Rendering --------------------
 void Player::Render(float camOffsetX, float camOffsetY) const
 {
     if (!sprite)
@@ -240,7 +234,6 @@ void Player::Render(float camOffsetX, float camOffsetY) const
     sprite->SetPosition(wx, wy);
 }
 
-// -------------------- Scale System --------------------
 void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime)
 {
     if (!sprite)
@@ -318,7 +311,6 @@ void Player::RecomputeStatsFromScale(float s)
     }
 }
 
-// -------------------- Collision --------------------
 bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 {
     if (!nav)
