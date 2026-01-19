@@ -2,6 +2,15 @@
 
 namespace GameConfig
 {
+    // Mathematical Constants - Shared across all systems
+    // Note: PI is already defined in AppSettings.h as a macro
+    struct MathConstants
+    {
+        // Use the API's PI definition (defined in AppSettings.h)
+        static constexpr float TWO_PI = 6.28318530718f;
+        static constexpr float EPSILON = 0.0001f;
+    };
+
     // Audio Resources - centralized file paths
     struct AudioResources
     {
@@ -59,16 +68,12 @@ namespace GameConfig
         static constexpr float UPDATE_CACHE_TIME_MS = 16.0f;
     };
 
-    // NEW: Zombie System Configuration
+    // Zombie System Configuration
     struct ZombieConfig
     {
         // Spawn distances
         static constexpr float SPAWN_MIN_RADIUS = 250.0f;
         static constexpr float SPAWN_MAX_RADIUS = 450.0f;
-
-        // Mathematical constants  
-        static constexpr float TWO_PI = 6.2831853f;
-        static constexpr float MOVEMENT_EPSILON = 0.0001f;
 
         // Performance limits
         static constexpr float MAX_DELTA_TIME_MS = 33.0f;
@@ -85,7 +90,6 @@ namespace GameConfig
         static constexpr float GREEN_SPAWN_CHANCE = 0.70f;
         static constexpr float RED_SPAWN_CHANCE = 0.90f;
         static constexpr float BLUE_SPAWN_CHANCE = 0.99f;
-        // PURPLE_ELITE gets remainder (1.0f)
 
         // LOD performance multipliers
         static constexpr float NO_COLLISION_MULTIPLIER = 1.25f;
@@ -95,7 +99,7 @@ namespace GameConfig
         // Lightweight update drift speed
         static constexpr float DRIFT_SPEED_MULTIPLIER = 0.5f;
 
-        // Zombie type stats (maxSpeed, seekWeight, sepWeight, maxHP, touchDamage, attackCooldownMs, fearRadius)
+        // Zombie type stats
         static constexpr float GREEN_MAX_SPEED = 60.0f;
         static constexpr float RED_MAX_SPEED = 90.0f;
         static constexpr float BLUE_MAX_SPEED = 45.0f;
@@ -126,16 +130,19 @@ namespace GameConfig
 
         // Spatial grid
         static constexpr float ZOMBIE_CELL_SIZE = 40.0f;
+
+        // Use shared math constants
+        static constexpr float TWO_PI = MathConstants::TWO_PI;
+        static constexpr float MOVEMENT_EPSILON = MathConstants::EPSILON;
     };
 
-    // NEW: Renderer Configuration
+    // Renderer Configuration
     struct RenderConfig
     {
         static constexpr float SCREEN_W = 1024.0f;
         static constexpr float SCREEN_H = 768.0f;
         static constexpr int FULL_DRAW_THRESHOLD = 50000;
         static constexpr int MAX_DRAW = 10000;
-       
 
         // Vignette settings
         static constexpr int VIGNETTE_BAND_SIZE = 70;
@@ -172,7 +179,7 @@ namespace GameConfig
         static constexpr float ZOMBIE_SIZE_BLUE = 5.0f;
         static constexpr float ZOMBIE_SIZE_PURPLE = 7.0f;
 
-        // Zombie colors (R, G, B per type)
+        // Zombie colors
         static constexpr float ZOMBIE_R_GREEN = 0.2f;
         static constexpr float ZOMBIE_G_GREEN = 1.0f;
         static constexpr float ZOMBIE_B_GREEN = 0.2f;
@@ -300,7 +307,7 @@ namespace GameConfig
         static constexpr float BAR_FILL_MIN_WIDTH = 0.5f;
     };
 
-    // NEW: Camera Configuration
+    // Camera Configuration
     struct CameraConfig
     {
         static constexpr float DEFAULT_SCREEN_WIDTH = 800.0f;
@@ -315,7 +322,7 @@ namespace GameConfig
         static constexpr float SCREEN_HALF_MULT = 0.5f;
     };
 
-    // NEW: Hash Configuration
+    // Hash Configuration
     struct HashConfig
     {
         static constexpr uint32_t HASH_XOR_1 = 16;
@@ -327,7 +334,7 @@ namespace GameConfig
         static constexpr uint32_t HASH_DIVISOR = 0x01000000u;
     };
 
-    // NEW: Hive System Configuration
+    // Hive System Configuration
     struct HiveConfig
     {
         // Hive placement
@@ -347,7 +354,7 @@ namespace GameConfig
         static constexpr float SPAWN_PER_MINUTE = 100.0f;
         static constexpr float MAX_SPAWN_ACCUM = 10.0f;
 
-        // Spawn zone around hive
+        // Spawn zone
         static constexpr float SPAWN_RADIUS_MIN_OFFSET = 10.0f;
         static constexpr float SPAWN_RADIUS_MAX_OFFSET = 55.0f;
         static constexpr int SPAWN_PLACEMENT_ATTEMPTS = 10;
@@ -374,9 +381,152 @@ namespace GameConfig
         static constexpr float HP_BAR_OFFSET_Y = 12.0f;
         static constexpr float ANIM_TIME_RESET = 100000.0f;
 
-        // Mathematical constants
-        static constexpr float TWO_PI = 6.28318530718f;
+        // Use shared math constants
+        static constexpr float TWO_PI = MathConstants::TWO_PI;
         static constexpr float SECONDS_PER_MINUTE = 60.0f;
         static constexpr float MS_TO_SEC = 0.001f;
+    };
+
+    // Player Configuration
+    struct PlayerConfig
+    {
+        // Sprite settings
+        static constexpr const char* SPRITE_PATH = "./data/TestData/Test.bmp";
+        static constexpr int SPRITE_COLUMNS = 8;
+        static constexpr int SPRITE_ROWS = 4;
+        static constexpr float INITIAL_X = 400.0f;
+        static constexpr float INITIAL_Y = 400.0f;
+
+        // Animation speeds
+        static constexpr float WALK_ANIM_SPEED = 1.0f / 15.0f;
+        static constexpr float IDLE_ANIM_SPEED = 1.0f;
+
+        // Base stats
+        static constexpr float BASE_SPEED = 200.0f;
+        static constexpr int BASE_MAX_HEALTH = 200;
+        static constexpr int INITIAL_HEALTH = 200;
+
+        // Input deadzone
+        static constexpr float INPUT_DEADZONE = 0.15f;
+
+        // Movement substep tuning
+        static constexpr float MAX_DELTA_TIME = 0.20f;
+        static constexpr float MAX_SUBSTEP = 1.0f / 60.0f;
+        static constexpr int MIN_SUBSTEPS = 1;
+        static constexpr int MAX_SUBSTEPS = 8;
+
+        // Scale system
+        static constexpr float SCALE_PER_SECOND = 1.0f;
+        static constexpr float SCALE_DT_MAX = 0.0333f;
+        static constexpr float SCALE_MIN = 0.4f;
+        static constexpr float SCALE_MAX = 2.0f;
+
+        // Scale breakpoints
+        static constexpr float SMALL_SCALE = 0.7f;
+        static constexpr float BIG_SCALE = 1.3f;
+
+        // Small scale multipliers
+        static constexpr float SMALL_SPEED_MULT = 2.00f;
+        static constexpr float SMALL_HP_MULT = 0.60f;
+
+        // Normal scale multipliers
+        static constexpr float NORMAL_SPEED_MULT = 1.00f;
+        static constexpr float NORMAL_HP_MULT = 1.00f;
+
+        // Big scale multipliers
+        static constexpr float BIG_SPEED_MULT = 0.50f;
+        static constexpr float BIG_HP_MULT = 1.60f;
+
+        // Health bounds
+        static constexpr int MIN_HEALTH = 1;
+        static constexpr int MAX_HEALTH_CAP = 999;
+
+        // Collision
+        static constexpr float BASE_COLLISION_RADIUS = 40.0f;
+        static constexpr int COLLISION_CHECK_POINTS = 8;
+
+        // Use shared math constants
+        static constexpr float EPSILON = MathConstants::EPSILON;
+    };
+
+    // Attack System Configuration  
+    struct AttackConfig
+    {
+        // Cooldowns (ms)
+        static constexpr float PULSE_COOLDOWN_MS = 500.0f;
+        static constexpr float SLASH_COOLDOWN_MS = 200.0f;
+        static constexpr float METEOR_COOLDOWN_MS = 900.0f;
+
+        // Audio paths
+        static constexpr const char* PULSE_SOUND = "./Data/TestData/AOE.mp3";
+        static constexpr const char* SLASH_SOUND = "./Data/TestData/slash.mp3";
+        static constexpr const char* METEOR_SOUND = "./Data/TestData/explode.mp3";
+
+        // Scale-based damage/radius multipliers
+        static constexpr float SMALL_SCALE = 0.7f;
+        static constexpr float BIG_SCALE = 1.3f;
+
+        static constexpr float SMALL_DMG_MULT = 0.70f;
+        static constexpr float SMALL_RAD_MULT = 0.60f;
+
+        static constexpr float NORMAL_DMG_MULT = 1.00f;
+        static constexpr float NORMAL_RAD_MULT = 1.00f;
+
+        static constexpr float BIG_DMG_MULT = 1.45f;
+        static constexpr float BIG_RAD_MULT = 1.80f;
+
+        // Pulse attack
+        static constexpr float PULSE_BASE_RADIUS = 200.0f;
+        static constexpr float PULSE_HIVE_DAMAGE = 20.0f;
+        static constexpr float PULSE_SHAKE_STRENGTH = 6.0f;
+        static constexpr float PULSE_SHAKE_DURATION = 0.08f;
+        static constexpr float PULSE_HIVE_SHAKE_STRENGTH = 4.0f;
+        static constexpr float PULSE_HIVE_SHAKE_DURATION = 0.05f;
+
+        // Slash attack
+        static constexpr float SLASH_BASE_RANGE = 300.0f;
+        static constexpr float SLASH_COS_HALF_ANGLE = 0.985f;
+        static constexpr float SLASH_CENTER_DIST = 90.0f;
+        static constexpr float SLASH_HIT_RADIUS = 70.0f;
+        static constexpr float SLASH_HIVE_DAMAGE = 30.0f;
+        static constexpr float SLASH_SHAKE_STRENGTH = 5.0f;
+        static constexpr float SLASH_SHAKE_DURATION = 0.06f;
+
+        // Meteor attack
+        static constexpr float METEOR_TARGET_DIST = 260.0f;
+        static constexpr float METEOR_BASE_RADIUS = 120.0f;
+        static constexpr float METEOR_HIVE_DAMAGE = 50.0f;
+        static constexpr float METEOR_SHAKE_STRENGTH = 8.0f;
+        static constexpr float METEOR_SHAKE_DURATION = 0.10f;
+        static constexpr float METEOR_HIVE_SHAKE_STRENGTH = 9.0f;
+        static constexpr float METEOR_HIVE_SHAKE_DURATION = 0.12f;
+
+        // Fear mechanics
+        static constexpr float ELITE_FEAR_RADIUS = 750.0f;
+        static constexpr float ELITE_FEAR_DURATION_MS = 1200.0f;
+        static constexpr float ELITE_FEAR_SHAKE_STRENGTH = 10.0f;
+        static constexpr float ELITE_FEAR_SHAKE_DURATION = 0.12f;
+
+        static constexpr float AOE_FEAR_RADIUS = 350.0f;
+        static constexpr float AOE_FEAR_DURATION_MS = 1200.0f;
+        static constexpr float AOE_FEAR_SHAKE_STRENGTH = 10.0f;
+        static constexpr float AOE_FEAR_SHAKE_DURATION = 0.12f;
+
+        // VFX durations
+        static constexpr float SLASH_FX_DURATION_MS = 80.0f;
+        static constexpr float PULSE_FX_DURATION_MS = 140.0f;
+        static constexpr float METEOR_FX_DURATION_MS = 220.0f;
+
+        // VFX rendering
+        static constexpr int CIRCLE_SEGMENTS_LOW = 24;
+        static constexpr int CIRCLE_SEGMENTS_MED = 28;
+        static constexpr int CIRCLE_SEGMENTS_HIGH = 32;
+        static constexpr float PULSE_INNER_RADIUS_MULT = 0.65f;
+        static constexpr float METEOR_MID_RADIUS_MULT = 0.7f;
+        static constexpr float METEOR_INNER_RADIUS_MULT = 0.4f;
+
+        // Use shared math constants
+        static constexpr float TWO_PI = MathConstants::TWO_PI;
+        static constexpr float EPSILON = MathConstants::EPSILON;
     };
 }

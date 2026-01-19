@@ -3,6 +3,7 @@
 #include "ZombieSystem.h"
 #include "HiveSystem.h"
 #include "CameraSystem.h"
+#include "GameConfig.h"
 #include "../ContestAPI/app.h"
 
 #include <cmath>
@@ -20,74 +21,70 @@ static float Lerp(float a, float b, float t)
     return a + (b - a) * t;
 }
 
-// Small (<=0.7): dmg 0.70x, radius 0.60x
-// Normal (~1.0):  dmg 1.00x, radius 1.00x
-// Big (>=1.3):    dmg 1.45x, radius 1.80x
+// Scale-based damage/radius multipliers using centralized config
 static void GetAttackMultsFromScale(float s, float& outDmgMult, float& outRadMult)
 {
-    const float smallS = 0.7f;
-    const float bigS = 1.3f;
-
-    const float smallDmg = 0.70f;
-    const float smallRad = 0.60f;
-
-    const float normDmg = 1.00f;
-    const float normRad = 1.00f;
-
-    const float bigDmg = 1.45f;
-    const float bigRad = 1.80f;
-
-    if (s <= smallS) { outDmgMult = smallDmg; outRadMult = smallRad; return; }
-    if (s >= bigS) { outDmgMult = bigDmg;   outRadMult = bigRad;   return; }
+    if (s <= GameConfig::AttackConfig::SMALL_SCALE)
+    {
+        outDmgMult = GameConfig::AttackConfig::SMALL_DMG_MULT;
+        outRadMult = GameConfig::AttackConfig::SMALL_RAD_MULT;
+        return;
+    }
+    if (s >= GameConfig::AttackConfig::BIG_SCALE)
+    {
+        outDmgMult = GameConfig::AttackConfig::BIG_DMG_MULT;
+        outRadMult = GameConfig::AttackConfig::BIG_RAD_MULT;
+        return;
+    }
 
     if (s < 1.0f)
     {
-        float t = (s - smallS) / (1.0f - smallS);
+        float t = (s - GameConfig::AttackConfig::SMALL_SCALE) / (1.0f - GameConfig::AttackConfig::SMALL_SCALE);
         t = Clamp01(t);
-        outDmgMult = Lerp(smallDmg, normDmg, t);
-        outRadMult = Lerp(smallRad, normRad, t);
+        outDmgMult = Lerp(GameConfig::AttackConfig::SMALL_DMG_MULT, GameConfig::AttackConfig::NORMAL_DMG_MULT, t);
+        outRadMult = Lerp(GameConfig::AttackConfig::SMALL_RAD_MULT, GameConfig::AttackConfig::NORMAL_RAD_MULT, t);
     }
     else
     {
-        float t = (s - 1.0f) / (bigS - 1.0f);
+        float t = (s - 1.0f) / (GameConfig::AttackConfig::BIG_SCALE - 1.0f);
         t = Clamp01(t);
-        outDmgMult = Lerp(normDmg, bigDmg, t);
-        outRadMult = Lerp(normRad, bigRad, t);
+        outDmgMult = Lerp(GameConfig::AttackConfig::NORMAL_DMG_MULT, GameConfig::AttackConfig::BIG_DMG_MULT, t);
+        outRadMult = Lerp(GameConfig::AttackConfig::NORMAL_RAD_MULT, GameConfig::AttackConfig::BIG_RAD_MULT, t);
     }
 }
 
 // ------------------- shared tuning -------------------
-struct SlashParams { float range = 300.0f; float cosHalfAngle = 0.985f; };
+struct SlashParams { float range; float cosHalfAngle; };
 static SlashParams GetSlashParams(float radMult)
 {
     SlashParams p;
-    p.range = 300.0f * radMult;     // tune slash reach
-    p.cosHalfAngle = 0.985f;        // tune slash width
+    p.range = GameConfig::AttackConfig::SLASH_BASE_RANGE * radMult;
+    p.cosHalfAngle = GameConfig::AttackConfig::SLASH_COS_HALF_ANGLE;
     return p;
 }
 
-struct PulseParams { float radius = 200.0f; };
+struct PulseParams { float radius; };
 static PulseParams GetPulseParams(float radMult)
 {
     PulseParams p;
-    p.radius = 200.0f * radMult;     // tune pulse radius
+    p.radius = GameConfig::AttackConfig::PULSE_BASE_RADIUS * radMult;
     return p;
 }
 
-struct MeteorParams { float targetDist = 260.0f; float radius = 120.0f; };
+struct MeteorParams { float targetDist; float radius; };
 static MeteorParams GetMeteorParams(float radMult)
 {
     MeteorParams p;
-    p.targetDist = 260.0f;          // tune how far meteor lands
-    p.radius = 120.0f * radMult;    // tune meteor blast radius
+    p.targetDist = GameConfig::AttackConfig::METEOR_TARGET_DIST;
+    p.radius = GameConfig::AttackConfig::METEOR_BASE_RADIUS * radMult;
     return p;
 }
 
 // ------------------- draw helper (circle made of lines) -------------------
-static void DrawCircleLinesApprox(float cx, float cy, float r, float cr, float cg, float cb, int segments = 24)
+static void DrawCircleLinesApprox(float cx, float cy, float r, float cr, float cg, float cb, int segments = GameConfig::AttackConfig::CIRCLE_SEGMENTS_LOW)
 {
     if (segments < 8) segments = 8;
-    const float step = 6.28318530718f / (float)segments;
+    const float step = GameConfig::AttackConfig::TWO_PI / (float)segments;
 
     float prevX = cx + r;
     float prevY = cy;
@@ -154,22 +151,14 @@ static void TriggerFearIfEliteKilled(bool eliteKilled, float fx, float fy, Zombi
 {
     if (!eliteKilled) return;
 
-    const float fearRadius = 750.0f;
-    const float fearDurationMs = 1200.0f;
-
-    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
-    camera.AddShake(10.0f, 0.12f);
+    zombies.TriggerFear(fx, fy, GameConfig::AttackConfig::ELITE_FEAR_RADIUS, GameConfig::AttackConfig::ELITE_FEAR_DURATION_MS);
+    camera.AddShake(GameConfig::AttackConfig::ELITE_FEAR_SHAKE_STRENGTH, GameConfig::AttackConfig::ELITE_FEAR_SHAKE_DURATION);
 }
-
 
 static void TriggerFearAOE(float fx, float fy, ZombieSystem& zombies, CameraSystem& camera)
 {
-   
-    const float fearRadius = 350.0f;
-    const float fearDurationMs = 1200.0f;
-
-    zombies.TriggerFear(fx, fy, fearRadius, fearDurationMs);
-    camera.AddShake(10.0f, 0.12f);
+    zombies.TriggerFear(fx, fy, GameConfig::AttackConfig::AOE_FEAR_RADIUS, GameConfig::AttackConfig::AOE_FEAR_DURATION_MS);
+    camera.AddShake(GameConfig::AttackConfig::AOE_FEAR_SHAKE_STRENGTH, GameConfig::AttackConfig::AOE_FEAR_SHAKE_DURATION);
 }
 
 void AttackSystem::Process(const AttackInput& in,
@@ -186,8 +175,8 @@ void AttackSystem::Process(const AttackInput& in,
     if (in.pulsePressed && pulseCooldownMs <= 0.0f)
     {
         DoPulse(playerX, playerY, playerScale, zombies, hives, camera);
-        pulseCooldownMs = 500.0f;
-        App::PlayAudio("./Data/TestData/AOE.mp3", false);
+        pulseCooldownMs = GameConfig::AttackConfig::PULSE_COOLDOWN_MS;
+        App::PlayAudio(GameConfig::AttackConfig::PULSE_SOUND, false);
 
         // start pulse FX (centered on player)
         float dmgDummy = 1.0f, radMult = 1.0f;
@@ -196,6 +185,7 @@ void AttackSystem::Process(const AttackInput& in,
 
         pulseFx.active = true;
         pulseFx.timeMs = 0.0f;
+        pulseFx.durMs = GameConfig::AttackConfig::PULSE_FX_DURATION_MS;
         pulseFx.x = playerX;
         pulseFx.y = playerY;
         pulseFx.radMult = radMult;
@@ -205,18 +195,19 @@ void AttackSystem::Process(const AttackInput& in,
     if (in.slashPressed && slashCooldownMs <= 0.0f)
     {
         DoSlash(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
-        slashCooldownMs = 200.0f;
-        App::PlayAudio("./Data/TestData/slash.mp3", false);
+        slashCooldownMs = GameConfig::AttackConfig::SLASH_COOLDOWN_MS;
+        App::PlayAudio(GameConfig::AttackConfig::SLASH_SOUND, false);
 
         // start slash FX
         slashFx.active = true;
         slashFx.timeMs = 0.0f;
+        slashFx.durMs = GameConfig::AttackConfig::SLASH_FX_DURATION_MS;
         slashFx.x = playerX;
         slashFx.y = playerY;
 
         float ax = in.aimX, ay = in.aimY;
         float len2 = ax * ax + ay * ay;
-        if (len2 > 0.0001f)
+        if (len2 > GameConfig::AttackConfig::EPSILON)
         {
             float inv = 1.0f / std::sqrt(len2);
             ax *= inv; ay *= inv;
@@ -236,13 +227,13 @@ void AttackSystem::Process(const AttackInput& in,
     if (in.meteorPressed && meteorCooldownMs <= 0.0f)
     {
         DoMeteor(playerX, playerY, playerScale, in.aimX, in.aimY, zombies, hives, camera);
-        meteorCooldownMs = 900.0f;
-        App::PlayAudio("./Data/TestData/explode.mp3", false);
+        meteorCooldownMs = GameConfig::AttackConfig::METEOR_COOLDOWN_MS;
+        App::PlayAudio(GameConfig::AttackConfig::METEOR_SOUND, false);
 
         // start meteor FX (at landing point)
         float ax = in.aimX, ay = in.aimY;
         float len2 = ax * ax + ay * ay;
-        if (len2 > 0.0001f)
+        if (len2 > GameConfig::AttackConfig::EPSILON)
         {
             float inv = 1.0f / std::sqrt(len2);
             ax *= inv; ay *= inv;
@@ -258,6 +249,7 @@ void AttackSystem::Process(const AttackInput& in,
 
         meteorFx.active = true;
         meteorFx.timeMs = 0.0f;
+        meteorFx.durMs = GameConfig::AttackConfig::METEOR_FX_DURATION_MS;
         meteorFx.x = tx;
         meteorFx.y = ty;
         meteorFx.radMult = radMult;
@@ -295,14 +287,14 @@ void AttackSystem::DoPulse(float px, float py, float playerScale, ZombieSystem& 
 
     lastPulseKills = killed;
 
-    const float hiveDamage = 20.0f * dmgMult;
+    const float hiveDamage = GameConfig::AttackConfig::PULSE_HIVE_DAMAGE * dmgMult;
     const bool hitHive = hives.DamageHiveAt(px, py, radius, hiveDamage);
 
-    if (killed > 0) camera.AddShake(6.0f, 0.08f);
-    if (hitHive)    camera.AddShake(4.0f, 0.05f);
+    if (killed > 0) camera.AddShake(GameConfig::AttackConfig::PULSE_SHAKE_STRENGTH, GameConfig::AttackConfig::PULSE_SHAKE_DURATION);
+    if (hitHive)    camera.AddShake(GameConfig::AttackConfig::PULSE_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::PULSE_HIVE_SHAKE_DURATION);
 
     TriggerFearAOE(px, py, zombies, camera);
-    
+
     //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
 
@@ -318,7 +310,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
     const float cosHalfAngle = sp.cosHalfAngle;
 
     float len2 = aimX * aimX + aimY * aimY;
-    if (len2 > 0.0001f)
+    if (len2 > GameConfig::AttackConfig::EPSILON)
     {
         float inv = 1.0f / std::sqrt(len2);
         aimX *= inv; aimY *= inv;
@@ -337,7 +329,7 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
         if (d2 > range2) { i++; continue; }
 
         const float d = std::sqrt(d2);
-        if (d < 0.0001f)
+        if (d < GameConfig::AttackConfig::EPSILON)
         {
             if (zombies.GetType(i) == ZombieSystem::PURPLE_ELITE) eliteKilled = true;
             zombies.KillByPlayer(i);
@@ -362,16 +354,16 @@ void AttackSystem::DoSlash(float px, float py, float playerScale, float aimX, fl
 
     lastSlashKills = killed;
 
-    const float slashCenterDist = 90.0f * radMult;
+    const float slashCenterDist = GameConfig::AttackConfig::SLASH_CENTER_DIST * radMult;
     const float hx = px + aimX * slashCenterDist;
     const float hy = py + aimY * slashCenterDist;
-    const float slashHitRadius = 70.0f * radMult;
+    const float slashHitRadius = GameConfig::AttackConfig::SLASH_HIT_RADIUS * radMult;
 
-    const float hiveDamage = 30.0f * dmgMult;
+    const float hiveDamage = GameConfig::AttackConfig::SLASH_HIVE_DAMAGE * dmgMult;
     const bool hitHive = hives.DamageHiveAt(hx, hy, slashHitRadius, hiveDamage);
 
-    if (killed > 0) camera.AddShake(5.0f, 0.06f);
-    if (hitHive)    camera.AddShake(5.0f, 0.06f);
+    if (killed > 0) camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
+    if (hitHive)    camera.AddShake(GameConfig::AttackConfig::SLASH_SHAKE_STRENGTH, GameConfig::AttackConfig::SLASH_SHAKE_DURATION);
 
     //TriggerFearIfEliteKilled(eliteKilled, px, py, zombies, camera);
 }
@@ -383,7 +375,7 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
     GetAttackMultsFromScale(playerScale, dmgMult, radMult);
 
     float len2 = aimX * aimX + aimY * aimY;
-    if (len2 > 0.0001f)
+    if (len2 > GameConfig::AttackConfig::EPSILON)
     {
         float inv = 1.0f / std::sqrt(len2);
         aimX *= inv; aimY *= inv;
@@ -419,11 +411,11 @@ void AttackSystem::DoMeteor(float px, float py, float playerScale, float aimX, f
 
     lastMeteorKills = killed;
 
-    const float hiveDamage = 50.0f * dmgMult;
+    const float hiveDamage = GameConfig::AttackConfig::METEOR_HIVE_DAMAGE * dmgMult;
     const bool hitHive = hives.DamageHiveAt(tx, ty, radius, hiveDamage);
 
-    if (killed > 0) camera.AddShake(8.0f, 0.10f);
-    if (hitHive)    camera.AddShake(9.0f, 0.12f);
+    if (killed > 0) camera.AddShake(GameConfig::AttackConfig::METEOR_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_SHAKE_DURATION);
+    if (hitHive)    camera.AddShake(GameConfig::AttackConfig::METEOR_HIVE_SHAKE_STRENGTH, GameConfig::AttackConfig::METEOR_HIVE_SHAKE_DURATION);
 
     //TriggerFearIfEliteKilled(eliteKilled, tx, ty, zombies, camera);
 }
@@ -456,7 +448,7 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         auto Norm = [](float& x, float& y)
             {
                 float l2 = x * x + y * y;
-                if (l2 > 0.0001f)
+                if (l2 > GameConfig::AttackConfig::EPSILON)
                 {
                     float inv = 1.0f / std::sqrt(l2);
                     x *= inv; y *= inv;
@@ -500,8 +492,8 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
         float cg = 0.80f * t;
         float cb = 1.00f * t;
 
-        DrawCircleLinesApprox(sx, sy, r, cr, cg, cb, 28);
-        DrawCircleLinesApprox(sx, sy, r * 0.65f, cr, cg, cb, 28);
+        DrawCircleLinesApprox(sx, sy, r, cr, cg, cb, GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
+        DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::PULSE_INNER_RADIUS_MULT, cr, cg, cb, GameConfig::AttackConfig::CIRCLE_SEGMENTS_MED);
     }
 
     // METEOR (fire rings)
@@ -517,10 +509,10 @@ void AttackSystem::RenderFX(float camOffX, float camOffY) const
 
         // fire palette (all fade with t)
         // outer: orange
-        DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, 32);
+        DrawCircleLinesApprox(sx, sy, r, 1.00f * t, 0.45f * t, 0.05f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         // mid: yellow
-        DrawCircleLinesApprox(sx, sy, r * 0.7f, 1.00f * t, 0.85f * t, 0.10f * t, 32);
+        DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_MID_RADIUS_MULT, 1.00f * t, 0.85f * t, 0.10f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
         // inner: red
-        DrawCircleLinesApprox(sx, sy, r * 0.4f, 1.00f * t, 0.15f * t, 0.02f * t, 32);
+        DrawCircleLinesApprox(sx, sy, r * GameConfig::AttackConfig::METEOR_INNER_RADIUS_MULT, 1.00f * t, 0.15f * t, 0.02f * t, GameConfig::AttackConfig::CIRCLE_SEGMENTS_HIGH);
     }
 }

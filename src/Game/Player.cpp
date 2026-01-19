@@ -1,38 +1,49 @@
-﻿// Player.cpp
+﻿// Player.cpp - AAA Quality Version
 #include "Player.h"
 #include "NavGrid.h"
+#include "GameConfig.h"
+
 #include <cmath>
 #include <algorithm>
 
-static float Clamp01(float v)
+using namespace GameConfig;
+
+// -------------------- Utilities --------------------
+namespace
 {
-    if (v < 0.0f) return 0.0f;
-    if (v > 1.0f) return 1.0f;
-    return v;
+    float Clamp01(float v)
+    {
+        return std::clamp(v, 0.0f, .0f);
+    }
+
+    float Lerp(float a, float b, float t)
+    {
+        return a + (b - a) * t;
+    }
 }
 
-static float Lerp(float a, float b, float t)
-{
-    return a + (b - a) * t;
-}
-
+// -------------------- Initialization --------------------
 void Player::Init()
 {
-    sprite.reset(App::CreateSprite("./data/TestData/Test.bmp", 8, 4));
-    sprite->SetPosition(400.0f, 400.0f);
+    sprite.reset(App::CreateSprite(
+        PlayerConfig::SPRITE_PATH,
+        PlayerConfig::SPRITE_COLUMNS,
+        PlayerConfig::SPRITE_ROWS
+    ));
 
-    const float walkSpeed = 1.0f / 15.0f;
-    const float idleSpeed = 1.0f;
+    sprite->SetPosition(PlayerConfig::INITIAL_X, PlayerConfig::INITIAL_Y);
 
-    sprite->CreateAnimation(ANIM_WALK_BACK, walkSpeed, { 0,1,2,3,4,5,6,7 });
-    sprite->CreateAnimation(ANIM_WALK_LEFT, walkSpeed, { 8,9,10,11,12,13,14,15 });
-    sprite->CreateAnimation(ANIM_WALK_RIGHT, walkSpeed, { 16,17,18,19,20,21,22,23 });
-    sprite->CreateAnimation(ANIM_WALK_FWD, walkSpeed, { 24,25,26,27,28,29,30,31 });
+    // Create walk animations
+    sprite->CreateAnimation(ANIM_WALK_BACK, PlayerConfig::WALK_ANIM_SPEED, { 0,1,2,3,4,5,6,7 });
+    sprite->CreateAnimation(ANIM_WALK_LEFT, PlayerConfig::WALK_ANIM_SPEED, { 8,9,10,11,12,13,14,15 });
+    sprite->CreateAnimation(ANIM_WALK_RIGHT, PlayerConfig::WALK_ANIM_SPEED, { 16,17,18,19,20,21,22,23 });
+    sprite->CreateAnimation(ANIM_WALK_FWD, PlayerConfig::WALK_ANIM_SPEED, { 24,25,26,27,28,29,30,31 });
 
-    sprite->CreateAnimation(ANIM_IDLE_BACK, idleSpeed, { 0 });
-    sprite->CreateAnimation(ANIM_IDLE_LEFT, idleSpeed, { 8 });
-    sprite->CreateAnimation(ANIM_IDLE_RIGHT, idleSpeed, { 16 });
-    sprite->CreateAnimation(ANIM_IDLE_FWD, idleSpeed, { 24 });
+    // Create idle animations
+    sprite->CreateAnimation(ANIM_IDLE_BACK, PlayerConfig::IDLE_ANIM_SPEED, { 0 });
+    sprite->CreateAnimation(ANIM_IDLE_LEFT, PlayerConfig::IDLE_ANIM_SPEED, { 8 });
+    sprite->CreateAnimation(ANIM_IDLE_RIGHT, PlayerConfig::IDLE_ANIM_SPEED, { 16 });
+    sprite->CreateAnimation(ANIM_IDLE_FWD, PlayerConfig::IDLE_ANIM_SPEED, { 24 });
 
     baseSpeedPixelsPerSec = speedPixelsPerSec;
     baseMaxHealth = maxHealth;
@@ -40,25 +51,38 @@ void Player::Init()
     RecomputeStatsFromScale(sprite->GetScale());
 }
 
+// -------------------- Position --------------------
 float Player::GetScale() const
 {
-    if (!sprite) return 1.0f;
+    if (!sprite)
+        return 1.0f;
     return sprite->GetScale();
 }
 
 void Player::SetWorldPosition(float x, float y)
 {
-    if (!sprite) return;
+    if (!sprite)
+        return;
     sprite->SetPosition(x, y);
 }
 
+void Player::GetWorldPosition(float& outX, float& outY) const
+{
+    if (!sprite)
+    {
+        outX = 0.0f;
+        outY = 0.0f;
+        return;
+    }
+    sprite->GetPosition(outX, outY);
+}
+
+// -------------------- Health & Combat --------------------
 void Player::Revive(bool fullHeal)
 {
     dead = false;
     stopAnimPressed = false;
     wasMovingLastFrame = false;
-
-    // Clear any previous i-frames (MyGame will set new ones on respawn)
     invulnMs = 0.0f;
 
     if (fullHeal)
@@ -70,15 +94,49 @@ void Player::Revive(bool fullHeal)
         sprite->SetAnimation(ANIM_IDLE_FWD, true);
 }
 
+void Player::Heal(float amount)
+{
+    if (amount <= 0.0f)
+        return;
+
+    health += static_cast<int>(std::lround(amount));
+    if (health > maxHealth)
+        health = maxHealth;
+}
+
+void Player::TakeDamage(int amount)
+{
+    if (dead)
+        return;
+
+    // Invulnerability frames
+    if (invulnMs > 0.0f)
+        return;
+
+    health -= amount;
+    if (health < 0)
+        health = 0;
+
+    if (health == 0)
+    {
+        dead = true;
+        if (sprite)
+            sprite->SetAnimation(-1);
+    }
+}
+
+// -------------------- Update --------------------
 void Player::Update(float deltaTime)
 {
-    if (!sprite) return;
+    if (!sprite)
+        return;
 
-    // Tick invulnerability timer (ms)
+    // Tick invulnerability timer
     if (invulnMs > 0.0f)
     {
         invulnMs -= deltaTime;
-        if (invulnMs < 0.0f) invulnMs = 0.0f;
+        if (invulnMs < 0.0f)
+            invulnMs = 0.0f;
     }
 
     sprite->Update(deltaTime);
@@ -89,22 +147,26 @@ void Player::Update(float deltaTime)
         return;
     }
 
+    // Apply deadzone to input
     float mx = moveX;
     float my = moveY;
 
-    const float deadZone = 0.15f;
-    if (std::fabs(mx) < deadZone) mx = 0.0f;
-    if (std::fabs(my) < deadZone) my = 0.0f;
+    if (std::fabs(mx) < PlayerConfig::INPUT_DEADZONE)
+        mx = 0.0f;
+    if (std::fabs(my) < PlayerConfig::INPUT_DEADZONE)
+        my = 0.0f;
 
     const bool moving = (mx != 0.0f || my != 0.0f);
 
     if (moving)
     {
+        // Determine facing direction
         if (std::fabs(mx) > std::fabs(my))
             facing = (mx > 0.0f) ? FACE_RIGHT : FACE_LEFT;
         else
             facing = (my > 0.0f) ? FACE_FWD : FACE_BACK;
 
+        // Set walk animation
         switch (facing)
         {
         case FACE_RIGHT: sprite->SetAnimation(ANIM_WALK_RIGHT); break;
@@ -113,26 +175,29 @@ void Player::Update(float deltaTime)
         case FACE_BACK:  sprite->SetAnimation(ANIM_WALK_BACK);  break;
         }
 
-        float lenSq = mx * mx + my * my;
+        // Normalize movement vector
+        const float lenSq = mx * mx + my * my;
         if (lenSq > 1.0f)
         {
-            float invLen = 1.0f / std::sqrt(lenSq);
+            const float invLen = 1.0f / std::sqrt(lenSq);
             mx *= invLen;
             my *= invLen;
         }
 
+        // Get current position
         float x, y;
         sprite->GetPosition(x, y);
 
+        // Clamp delta time to prevent tunneling
         float dt = deltaTime / 1000.0f;
-        if (dt > 0.20f) dt = 0.20f;
+        if (dt > PlayerConfig::MAX_DELTA_TIME)
+            dt = PlayerConfig::MAX_DELTA_TIME;
 
-        const float maxStep = 1.0f / 60.0f;
-        int steps = (int)std::ceil(dt / maxStep);
-        if (steps < 1) steps = 1;
-        if (steps > 8) steps = 8;
+        // Substep movement for smooth collision
+        int steps = static_cast<int>(std::ceil(dt / PlayerConfig::MAX_SUBSTEP));
+        steps = std::clamp(steps, PlayerConfig::MIN_SUBSTEPS, PlayerConfig::MAX_SUBSTEPS);
 
-        const float stepDt = dt / (float)steps;
+        const float stepDt = dt / static_cast<float>(steps);
 
         for (int i = 0; i < steps; ++i)
         {
@@ -142,11 +207,11 @@ void Player::Update(float deltaTime)
         }
 
         sprite->SetPosition(x, y);
-
         wasMovingLastFrame = true;
         return;
     }
 
+    // Not moving - set idle animation if just stopped
     if (wasMovingLastFrame)
     {
         switch (facing)
@@ -161,109 +226,90 @@ void Player::Update(float deltaTime)
     wasMovingLastFrame = false;
 }
 
+// -------------------- Rendering --------------------
 void Player::Render(float camOffsetX, float camOffsetY) const
 {
-    if (!sprite) return;
+    if (!sprite)
+        return;
 
     float wx, wy;
     sprite->GetPosition(wx, wy);
 
     sprite->SetPosition(wx - camOffsetX, wy - camOffsetY);
     sprite->Draw();
-
     sprite->SetPosition(wx, wy);
 }
 
-void Player::GetWorldPosition(float& outX, float& outY) const
-{
-    if (!sprite) { outX = 0.0f; outY = 0.0f; return; }
-    sprite->GetPosition(outX, outY);
-}
-
+// -------------------- Scale System --------------------
 void Player::ApplyScaleInput(bool scaleUpHeld, bool scaleDownHeld, float deltaTime)
 {
-    if (!sprite) return;
+    if (!sprite)
+        return;
 
     float s = sprite->GetScale();
 
-    const float scalePerSec = 1.0f;
-
     float dt = deltaTime / 1000.0f;
-    if (dt > 0.0333f) dt = 0.0333f;
+    if (dt > PlayerConfig::SCALE_DT_MAX)
+        dt = PlayerConfig::SCALE_DT_MAX;
 
-    if (scaleUpHeld)   s += scalePerSec * dt;
-    if (scaleDownHeld) s -= scalePerSec * dt;
+    if (scaleUpHeld)
+        s += PlayerConfig::SCALE_PER_SECOND * dt;
+    if (scaleDownHeld)
+        s -= PlayerConfig::SCALE_PER_SECOND * dt;
 
-    s = std::clamp(s, 0.4f, 2.0f);
+    s = std::clamp(s, PlayerConfig::SCALE_MIN, PlayerConfig::SCALE_MAX);
 
     sprite->SetScale(s);
-
     RecomputeStatsFromScale(s);
 }
 
 void Player::RecomputeStatsFromScale(float s)
 {
-    const float smallS = 0.7f;
-    const float bigS = 1.3f;
-
-    const float smallSpeed = 2.00f;
-    const float smallHP = 0.60f;
-
-    const float normalSpeed = 1.00f;
-    const float normalHP = 1.00f;
-
-    const float bigSpeed = 0.50f;
-    const float bigHP = 1.60f;
-
     float speedMult = 1.0f;
     float hpMult = 1.0f;
 
-    if (s <= smallS)
+    if (s <= PlayerConfig::SMALL_SCALE)
     {
-        speedMult = smallSpeed;
-        hpMult = smallHP;
+        speedMult = PlayerConfig::SMALL_SPEED_MULT;
+        hpMult = PlayerConfig::SMALL_HP_MULT;
     }
-    else if (s >= bigS)
+    else if (s >= PlayerConfig::BIG_SCALE)
     {
-        speedMult = bigSpeed;
-        hpMult = bigHP;
+        speedMult = PlayerConfig::BIG_SPEED_MULT;
+        hpMult = PlayerConfig::BIG_HP_MULT;
     }
     else
     {
         if (s < 1.0f)
         {
-            float t = (s - smallS) / (1.0f - smallS);
+            float t = (s - PlayerConfig::SMALL_SCALE) / (1.0f - PlayerConfig::SMALL_SCALE);
             t = Clamp01(t);
-            speedMult = Lerp(smallSpeed, normalSpeed, t);
-            hpMult = Lerp(smallHP, normalHP, t);
+            speedMult = Lerp(PlayerConfig::SMALL_SPEED_MULT, PlayerConfig::NORMAL_SPEED_MULT, t);
+            hpMult = Lerp(PlayerConfig::SMALL_HP_MULT, PlayerConfig::NORMAL_HP_MULT, t);
         }
         else
         {
-            float t = (s - 1.0f) / (bigS - 1.0f);
+            float t = (s - 1.0f) / (PlayerConfig::BIG_SCALE - 1.0f);
             t = Clamp01(t);
-            speedMult = Lerp(normalSpeed, bigSpeed, t);
-            hpMult = Lerp(normalHP, bigHP, t);
+            speedMult = Lerp(PlayerConfig::NORMAL_SPEED_MULT, PlayerConfig::BIG_SPEED_MULT, t);
+            hpMult = Lerp(PlayerConfig::NORMAL_HP_MULT, PlayerConfig::BIG_HP_MULT, t);
         }
     }
 
     speedPixelsPerSec = baseSpeedPixelsPerSec * speedMult;
 
     const int oldMax = maxHealth;
-    int newMax = (int)std::lround((float)baseMaxHealth * hpMult);
+    int newMax = static_cast<int>(std::lround(static_cast<float>(baseMaxHealth) * hpMult));
 
-    if (newMax < 1) newMax = 1;
-    if (newMax > 999) newMax = 999;
-
+    newMax = std::clamp(newMax, PlayerConfig::MIN_HEALTH, PlayerConfig::MAX_HEALTH_CAP);
     maxHealth = newMax;
 
     if (!dead)
     {
-        float hpPct = (oldMax > 0) ? ((float)health / (float)oldMax) : 1.0f;
-        int newHealth = (int)std::lround(hpPct * (float)maxHealth);
+        const float hpPct = (oldMax > 0) ? (static_cast<float>(health) / static_cast<float>(oldMax)) : 1.0f;
+        int newHealth = static_cast<int>(std::lround(hpPct * static_cast<float>(maxHealth)));
 
-        if (newHealth < 1) newHealth = 1;
-        if (newHealth > maxHealth) newHealth = maxHealth;
-
+        newHealth = std::clamp(newHealth, PlayerConfig::MIN_HEALTH, maxHealth);
         health = newHealth;
     }
     else
@@ -272,39 +318,17 @@ void Player::RecomputeStatsFromScale(float s)
     }
 }
 
-void Player::Heal(float amount)
-{
-    if (amount <= 0.0f) return;
-    health += (int)std::lround(amount);
-    if (health > maxHealth) health = maxHealth;
-}
-
-void Player::TakeDamage(int amount)
-{
-    if (dead) return;
-
-    // NEW: i-frames
-    if (invulnMs > 0.0f) return;
-
-    health -= amount;
-    if (health < 0) health = 0;
-
-    if (health == 0)
-    {
-        dead = true;
-        if (sprite) sprite->SetAnimation(-1);
-    }
-}
-
+// -------------------- Collision --------------------
 bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 {
-    if (!nav) return false;
+    if (!nav)
+        return false;
 
+    // Check 8 points around circle AABB
     const float minX = cx - r;
     const float maxX = cx + r;
     const float minY = cy - r;
     const float maxY = cy + r;
-
     const float midX = cx;
     const float midY = cy;
 
@@ -321,15 +345,15 @@ bool Player::CircleHitsBlocked(float cx, float cy, float r) const
 void Player::MoveWithCollision(float& x, float& y, float dx, float dy)
 {
     const float s = sprite ? sprite->GetScale() : 1.0f;
+    const float r = PlayerConfig::BASE_COLLISION_RADIUS * s;
 
-    const float baseR = 40.0f;
-    const float r = baseR * s;
-
-    float nx = x + dx;
+    // Try X movement
+    const float nx = x + dx;
     if (!CircleHitsBlocked(nx, y, r))
         x = nx;
 
-    float ny = y + dy;
+    // Try Y movement
+    const float ny = y + dy;
     if (!CircleHitsBlocked(x, ny, r))
         y = ny;
 }
