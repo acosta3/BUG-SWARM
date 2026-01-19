@@ -1,22 +1,22 @@
 // MyGame.h
 #pragma once
 
-#include "AttackSystem.h"
-#include "CameraSystem.h"
-#include "HiveSystem.h"
-#include "Input.h"
-#include "NavGrid.h"
 #include "Player.h"
-#include "WorldRenderer.h"
+#include "Input.h"
+#include "CameraSystem.h"
 #include "ZombieSystem.h"
+#include "AttackSystem.h"
+#include "NavGrid.h"
+#include "HiveSystem.h"
+#include "WorldRenderer.h"
 
 class MyGame
 {
 public:
-    static constexpr int kMaxZombies = 50'000;
+    static constexpr int kMaxZombies = 10'000;
 
     void Init();
-    void Update(float dtMs);
+    void Update(float deltaTimeMs);
     void Render();
     void Shutdown();
 
@@ -27,16 +27,16 @@ private:
     void InitSystems();
 
     // Update
-    void UpdateInput(float dtMs);
-    void UpdatePlayer(float dtMs);
-    void UpdateAttacks(float dtMs);
+    void UpdateInput(float deltaTimeMs);
+    void UpdatePlayer(float deltaTimeMs);
+    void UpdateAttacks(float deltaTimeMs);
     void UpdateNavFlowField(float playerX, float playerY);
-    void UpdateCamera(float dtMs, float playerX, float playerY);
-    void UpdateZombies(float dtMs, float playerX, float playerY);
+    void UpdateCamera(float deltaTimeMs, float playerX, float playerY);
+    void UpdateZombies(float deltaTimeMs, float playerX, float playerY);
 
     AttackInput BuildAttackInput(const InputState& in);
 
-    // Life state
+    // Death / respawn flow
     enum class LifeState
     {
         Playing,
@@ -49,32 +49,32 @@ private:
     bool InputLocked() const;
 
 private:
-    InputSystem   input;
-    Player        player;
-    CameraSystem  camera;
-    ZombieSystem  zombies;
-    AttackSystem  attacks;
-    NavGrid       nav;
-    HiveSystem    hives;
+    InputSystem input;
+    Player player;
+    CameraSystem camera;
+    ZombieSystem zombies;
+    AttackSystem attacks;
+    NavGrid nav;
+    HiveSystem hives;
     WorldRenderer renderer;
 
-    bool  densityView = false;
+    bool densityView = false;
 
     float lastAimX = 0.0f;
     float lastAimY = 1.0f;
-    int   lastTargetCell = -1;
+    int lastTargetCell = -1;
 
     float lastDtMs = 16.0f;
 
-    // Respawn location
+    // Respawn location (same level)
     float respawnX = 400.0f;
     float respawnY = 400.0f;
 
-    // Life-state machine
+    // Life-state machine timers
     LifeState life = LifeState::Playing;
-    float     lifeTimerMs = 0.0f;
+    float lifeTimerMs = 0.0f;
 
-    // Tuning
-    float deathPauseMs = 900.0f;
-    float respawnGraceMs = 650.0f;
+    // Tuning knobs
+    float deathPauseMs = 900.0f;      // how long you stay dead with frozen input
+    float respawnGraceMs = 650.0f;    // how long input stays frozen after respawn
 };
