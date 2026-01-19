@@ -605,4 +605,3 @@ void MyGame::RenderPauseOverlay() const
     App::Print(580, 350, "Slash:  X");
     App::Print(580, 330, "Meteor: Y");
 }
-//before
