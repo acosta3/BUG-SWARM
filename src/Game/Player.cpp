@@ -13,7 +13,7 @@ namespace
 {
     float Clamp01(float v)
     {
-        return std::clamp(v, 0.0f, .0f);
+        return std::clamp(v, 0.0f, 1.0f);  // ✅ FIXED: Was ".0f" instead of "1.0f"
     }
 
     float Lerp(float a, float b, float t)

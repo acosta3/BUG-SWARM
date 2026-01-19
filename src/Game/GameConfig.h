@@ -90,8 +90,8 @@ namespace GameConfig
     struct ZombieConfig
     {
         // Spawn distances
-        static constexpr float SPAWN_MIN_RADIUS = 250.0f;
-        static constexpr float SPAWN_MAX_RADIUS = 450.0f;
+        static constexpr float SPAWN_MIN_RADIUS = 75.0f;
+        static constexpr float SPAWN_MAX_RADIUS = 150.0f;
 
         // Performance limits
         static constexpr float MAX_DELTA_TIME_MS = 33.0f;
@@ -102,7 +102,7 @@ namespace GameConfig
         static constexpr float UNSTUCK_MAX_RADIUS_MULTIPLIER = 12.0f;
 
         // Separation performance limits
-        static constexpr int MAX_SEPARATION_CHECKS = 32;
+        static constexpr int MAX_SEPARATION_CHECKS = 32; // bottle neck
 
         // Type distribution probabilities
         static constexpr float GREEN_SPAWN_CHANCE = 0.70f;
@@ -356,11 +356,11 @@ namespace GameConfig
     struct HiveConfig
     {
         // Hive placement
-        static constexpr float WORLD_MIN = -1500.0f;
-        static constexpr float WORLD_MAX = 1500.0f;
-        static constexpr float PLACEMENT_MARGIN = 220.0f;
-        static constexpr float MIN_HIVE_DISTANCE = 900.0f;
-        static constexpr int HIVE_COUNT = 5;
+        static constexpr float WORLD_MIN = -1200.0f;  // Tighter from -1500
+        static constexpr float WORLD_MAX = 1200.0f;   // Tighter from +1500
+        static constexpr float PLACEMENT_MARGIN = 180.0f;  // Reduced from 220 for more usable space
+        static constexpr float MIN_HIVE_DISTANCE = 700.0f;  // Reduced from 900 so 3 hives fit better
+        static constexpr int HIVE_COUNT = 3;  // Changed from 5 to 3 for demo
         static constexpr int MAX_PLACEMENT_ATTEMPTS = 700;
         static constexpr int PLACEMENT_SEED = 1337;
 
@@ -405,6 +405,20 @@ namespace GameConfig
         static constexpr float MS_TO_SEC = 0.001f;
     };
 
+    // Boundary Wall Configuration
+    struct BoundaryConfig
+    {
+        // Wall dimensions - matches hive area with padding
+        static constexpr float BOUNDARY_MIN = -1300.0f;  // Slightly outside hive area
+        static constexpr float BOUNDARY_MAX = 1300.0f;
+        static constexpr float WALL_THICKNESS = 60.0f;   // Thick sci-fi walls
+        
+        // Sci-fi lab yellow color (subdued, not bright)
+        static constexpr float WALL_R = 0.65f;  // Muted yellow-gold
+        static constexpr float WALL_G = 0.55f;
+        static constexpr float WALL_B = 0.15f;
+    };
+
     // Player Configuration
     struct PlayerConfig
     {
@@ -416,7 +430,7 @@ namespace GameConfig
         static constexpr float INITIAL_Y = 400.0f;
 
         // Animation speeds
-        static constexpr float WALK_ANIM_SPEED = 1.0f / 15.0f;
+        static constexpr float WALK_ANIM_SPEED = 1.0f / 15.0f; // increasing the divso did the trick so do this
         static constexpr float IDLE_ANIM_SPEED = 1.0f;
 
         // Base stats
@@ -547,4 +561,5 @@ namespace GameConfig
         static constexpr float TWO_PI = MathConstants::TWO_PI;
         static constexpr float EPSILON = MathConstants::EPSILON;
     };
+
 }

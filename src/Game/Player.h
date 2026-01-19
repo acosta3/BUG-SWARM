@@ -43,6 +43,7 @@ public:
     // Navigation
     void SetNavGrid(const NavGrid* g) { nav = g; }
 
+
 private:
     // Animation IDs
     enum Anim
@@ -64,6 +65,7 @@ private:
     void RecomputeStatsFromScale(float newScale);
     bool CircleHitsBlocked(float cx, float cy, float r) const;
     void MoveWithCollision(float& x, float& y, float dx, float dy);
+
 
 private:
     // Health system

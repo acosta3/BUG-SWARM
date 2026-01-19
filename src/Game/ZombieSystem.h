@@ -5,6 +5,8 @@
 
 class NavGrid;
 
+
+
 struct ZombieTypeStats
 {
     float maxSpeed;
@@ -25,7 +27,7 @@ struct ZombieTuning
     float playerRadius = 16.0f;
     float zombieRadius = 14.0f;
 
-    // ✅ FIXED: Updated to match GameConfig (was 600.0f)
+    
     float sepActiveRadius = 600.0f;  // Separation LOD (only separate when close to player)
 
     // Separation force radius

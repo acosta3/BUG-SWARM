@@ -238,6 +238,25 @@ void MyGame::InitObstacles()
             nav.AddObstacleRect(x - half, y - half, x + half, y + half);
         };
 
+    // ========== BOUNDARY WALLS (Sci-Fi Lab Perimeter) ==========
+    // Using BoundaryConfig for the play area walls
+    const float bMin = BoundaryConfig::BOUNDARY_MIN;
+    const float bMax = BoundaryConfig::BOUNDARY_MAX;
+    const float thick = BoundaryConfig::WALL_THICKNESS;
+
+    // Top wall
+    nav.AddObstacleRect(bMin - thick, bMax, bMax + thick, bMax + thick);
+    
+    // Bottom wall
+    nav.AddObstacleRect(bMin - thick, bMin - thick, bMax + thick, bMin);
+    
+    // Left wall
+    nav.AddObstacleRect(bMin - thick, bMin, bMin, bMax);
+    
+    // Right wall
+    nav.AddObstacleRect(bMax, bMin, bMax + thick, bMax);
+
+    // ========== INTERIOR OBSTACLES ==========
     AddBlock(-400.0f, -240.0f);
     AddBlock(-200.0f, -250.0f);
     AddBlock(20.0f, -240.0f);
