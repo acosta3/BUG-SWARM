@@ -1,0 +1,361 @@
+#include "NavGrid.h"
+#include <algorithm>
+#include <cmath>
+#include <queue>
+#include "../ContestAPI/app.h"
+
+static void DrawFilledQuad(
+    float x0, float y0, float x1, float y1,
+    float r, float g, float b,
+    float z = 0.0f, float w = 1.0f)
+{
+    // Triangle 1: (x0,y0) (x1,y0) (x1,y1)
+    App::DrawTriangle(
+        x0, y0, z, w,
+        x1, y0, z, w,
+        x1, y1, z, w,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+
+    // Triangle 2: (x0,y0) (x1,y1) (x0,y1)
+    App::DrawTriangle(
+        x0, y0, z, w,
+        x1, y1, z, w,
+        x0, y1, z, w,
+        r, g, b,
+        r, g, b,
+        r, g, b,
+        false
+    );
+}
+
+
+void NavGrid::Init(float minX, float minY, float maxX, float maxY, float cs)
+{
+    worldMinX = minX;
+    worldMinY = minY;
+    worldMaxX = maxX;
+    worldMaxY = maxY;
+    cellSize = cs;
+
+    gridW = (int)((worldMaxX - worldMinX) / cellSize) + 1;
+    gridH = (int)((worldMaxY - worldMinY) / cellSize) + 1;
+
+    const int cellN = gridW * gridH;
+
+    blocked.assign(cellN, 0);
+    dist.resize(cellN);
+    flowX.assign(cellN, 0.0f);
+    flowY.assign(cellN, 0.0f);
+
+    targetCell = -1;
+}
+
+int NavGrid::CellIndex(float x, float y) const
+{
+    int cx = (int)((x - worldMinX) / cellSize);
+    int cy = (int)((y - worldMinY) / cellSize);
+
+    cx = std::clamp(cx, 0, gridW - 1);
+    cy = std::clamp(cy, 0, gridH - 1);
+
+    return cy * gridW + cx;
+}
+
+bool NavGrid::IsCircleBlocked(float x, float y, float radius) const
+{
+    // Treat outside world as blocked
+    if (x - radius < worldMinX || x + radius > worldMaxX ||
+        y - radius < worldMinY || y + radius > worldMaxY)
+        return true;
+
+    // Cells overlapped by the circle's AABB
+    int cx0 = (int)((x - radius - worldMinX) / cellSize);
+    int cy0 = (int)((y - radius - worldMinY) / cellSize);
+    int cx1 = (int)((x + radius - worldMinX) / cellSize);
+    int cy1 = (int)((y + radius - worldMinY) / cellSize);
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    const float r2 = radius * radius;
+
+    for (int cy = cy0; cy <= cy1; ++cy)
+    {
+        for (int cx = cx0; cx <= cx1; ++cx)
+        {
+            const int idx = cy * gridW + cx;
+            if (blocked[idx] == 0) continue;
+
+            // Cell AABB in world space
+            const float x0 = worldMinX + cx * cellSize;
+            const float y0 = worldMinY + cy * cellSize;
+            const float x1 = x0 + cellSize;
+            const float y1 = y0 + cellSize;
+
+            // Closest point on AABB to circle center
+            const float px = std::clamp(x, x0, x1);
+            const float py = std::clamp(y, y0, y1);
+
+            const float dx = x - px;
+            const float dy = y - py;
+
+            if (dx * dx + dy * dy <= r2)
+                return true;
+        }
+    }
+
+    return false;
+}
+
+
+
+void NavGrid::ClearObstacles()
+{
+    std::fill(blocked.begin(), blocked.end(), 0);
+}
+
+void NavGrid::AddObstacleRect(float x0, float y0, float x1, float y1)
+{
+    if (x0 > x1) std::swap(x0, x1);
+    if (y0 > y1) std::swap(y0, y1);
+
+    int cx0 = (int)((x0 - worldMinX) / cellSize);
+    int cy0 = (int)((y0 - worldMinY) / cellSize);
+    int cx1 = (int)((x1 - worldMinX) / cellSize);
+    int cy1 = (int)((y1 - worldMinY) / cellSize);
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    for (int cy = cy0; cy <= cy1; cy++)
+        for (int cx = cx0; cx <= cx1; cx++)
+            blocked[cy * gridW + cx] = 1;
+}
+
+void NavGrid::AddObstacleCircle(float cxW, float cyW, float radius)
+{
+    const float r2 = radius * radius;
+
+    int cx0 = (int)((cxW - radius - worldMinX) / cellSize);
+    int cy0 = (int)((cyW - radius - worldMinY) / cellSize);
+    int cx1 = (int)((cxW + radius - worldMinX) / cellSize);
+    int cy1 = (int)((cyW + radius - worldMinY) / cellSize);
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    for (int cy = cy0; cy <= cy1; cy++)
+    {
+        for (int cx = cx0; cx <= cx1; cx++)
+        {
+            float centerX = worldMinX + (cx + 0.5f) * cellSize;
+            float centerY = worldMinY + (cy + 0.5f) * cellSize;
+
+            float dx = centerX - cxW;
+            float dy = centerY - cyW;
+
+            if (dx * dx + dy * dy <= r2)
+                blocked[cy * gridW + cx] = 1;
+        }
+    }
+}
+
+void NavGrid::BuildFlowField(float targetX, float targetY)
+{
+    const int cellN = gridW * gridH;
+    const int INF = 1000000000;
+
+    targetCell = CellIndex(targetX, targetY);
+
+    for (int i = 0; i < cellN; i++)
+        dist[i] = INF;
+
+    std::queue<int> q;
+    dist[targetCell] = 0;
+    q.push(targetCell);
+
+    while (!q.empty())
+    {
+        int c = q.front();
+        q.pop();
+
+        int cx = c % gridW;
+        int cy = c / gridW;
+        int base = dist[c];
+
+        const int nx[4] = { cx + 1, cx - 1, cx, cx };
+        const int ny[4] = { cy, cy, cy + 1, cy - 1 };
+
+        for (int k = 0; k < 4; k++)
+        {
+            int x = nx[k], y = ny[k];
+            if (x < 0 || x >= gridW || y < 0 || y >= gridH) continue;
+
+            int nc = y * gridW + x;
+            if (blocked[nc]) continue;
+
+            if (dist[nc] > base + 1)
+            {
+                dist[nc] = base + 1;
+                q.push(nc);
+            }
+        }
+    }
+
+    for (int c = 0; c < cellN; c++)
+    {
+        if (blocked[c] || dist[c] == INF)
+        {
+            flowX[c] = 0.0f;
+            flowY[c] = 0.0f;
+            continue;
+        }
+
+        int cx = c % gridW;
+        int cy = c / gridW;
+
+        int bestC = c;
+        int bestD = dist[c];
+
+        const int nx[4] = { cx + 1, cx - 1, cx, cx };
+        const int ny[4] = { cy, cy, cy + 1, cy - 1 };
+
+        for (int k = 0; k < 4; k++)
+        {
+            int x = nx[k], y = ny[k];
+            if (x < 0 || x >= gridW || y < 0 || y >= gridH) continue;
+
+            int nc = y * gridW + x;
+            if (blocked[nc]) continue;
+
+            if (dist[nc] < bestD)
+            {
+                bestD = dist[nc];
+                bestC = nc;
+            }
+        }
+
+        if (bestC == c)
+        {
+            flowX[c] = 0.0f;
+            flowY[c] = 0.0f;
+        }
+        else
+        {
+            int bx = bestC % gridW;
+            int by = bestC / gridW;
+
+            float fromX = worldMinX + (cx + 0.5f) * cellSize;
+            float fromY = worldMinY + (cy + 0.5f) * cellSize;
+
+            float toX = worldMinX + (bx + 0.5f) * cellSize;
+            float toY = worldMinY + (by + 0.5f) * cellSize;
+
+            float dx = toX - fromX;
+            float dy = toY - fromY;
+
+            float l2 = dx * dx + dy * dy;
+            if (l2 > 0.0001f)
+            {
+                float inv = 1.0f / std::sqrt(l2);
+                flowX[c] = dx * inv;
+                flowY[c] = dy * inv;
+            }
+            else
+            {
+                flowX[c] = 0.0f;
+                flowY[c] = 0.0f;
+            }
+        }
+    }
+}
+static void DrawWallTile3D(float x0, float y0, float x1, float y1)
+{
+    // Slight shrink so adjacent tiles don't look like one giant slab
+    const float pad = 1.0f;
+    x0 += pad; y0 += pad;
+    x1 -= pad; y1 -= pad;
+
+    // Shadow (down-right)
+    const float sh = 5.0f;
+    DrawFilledQuad(x0 + sh, y0 + sh, x1 + sh, y1 + sh, 0.03f, 0.04f, 0.06f);
+
+    // Base tile fill (darker than your current cyan)
+    DrawFilledQuad(x0, y0, x1, y1, 0.18f, 0.28f, 0.36f);
+
+    // Outer outline (bright)
+    App::DrawLine(x0, y0, x1, y0, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x1, y0, x1, y1, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x1, y1, x0, y1, 0.70f, 0.90f, 1.00f);
+    App::DrawLine(x0, y1, x0, y0, 0.70f, 0.90f, 1.00f);
+
+    // Bevel: top/left highlight, bottom/right shadow
+    const float in = 2.0f;
+    App::DrawLine(x0 + in, y0 + in, x1 - in, y0 + in, 0.85f, 0.95f, 1.00f); // top
+    App::DrawLine(x0 + in, y0 + in, x0 + in, y1 - in, 0.80f, 0.92f, 1.00f); // left
+
+    App::DrawLine(x0 + in, y1 - in, x1 - in, y1 - in, 0.06f, 0.10f, 0.14f); // bottom
+    App::DrawLine(x1 - in, y0 + in, x1 - in, y1 - in, 0.06f, 0.10f, 0.14f); // right
+}
+
+
+
+void NavGrid::DebugDrawBlocked(float offX, float offY) const
+{
+    const float screenW = 1024.0f;
+    const float screenH = 768.0f;
+
+    // Visible world bounds
+    const float viewMinX = offX;
+    const float viewMinY = offY;
+    const float viewMaxX = offX + screenW;
+    const float viewMaxY = offY + screenH;
+
+    // Convert visible world bounds to cell bounds
+    int cx0 = (int)((viewMinX - worldMinX) / cellSize) - 1;
+    int cy0 = (int)((viewMinY - worldMinY) / cellSize) - 1;
+    int cx1 = (int)((viewMaxX - worldMinX) / cellSize) + 1;
+    int cy1 = (int)((viewMaxY - worldMinY) / cellSize) + 1;
+
+    cx0 = std::clamp(cx0, 0, gridW - 1);
+    cy0 = std::clamp(cy0, 0, gridH - 1);
+    cx1 = std::clamp(cx1, 0, gridW - 1);
+    cy1 = std::clamp(cy1, 0, gridH - 1);
+
+    // Style
+    const float r = 0.70f, g = 0.95f, b = 1.00f;
+
+    for (int cy = cy0; cy <= cy1; ++cy)
+    {
+        for (int cx = cx0; cx <= cx1; ++cx)
+        {
+            const int idx = cy * gridW + cx;
+            if (blocked[idx] == 0)
+                continue;
+
+            const float wx0 = worldMinX + cx * cellSize;
+            const float wy0 = worldMinY + cy * cellSize;
+            const float wx1 = wx0 + cellSize;
+            const float wy1 = wy0 + cellSize;
+
+            const float x0 = wx0 - offX;
+            const float y0 = wy0 - offY;
+            const float x1 = wx1 - offX;
+            const float y1 = wy1 - offY;
+
+            //DrawFilledQuad(x0, y0, x1, y1, r, g, b);
+            DrawWallTile3D(x0, y0, x1, y1);
+        }
+    }
+}
+

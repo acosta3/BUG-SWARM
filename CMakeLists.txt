@@ -142,16 +142,49 @@ endif()
 # This configures the game project, where participants will write their code
 ###############################################################################
 
-file(GLOB_RECURSE GAME_INC_FILES ${PROJECT_SOURCE_DIR}/src/Game/*.h)
-file(GLOB_RECURSE GAME_SRC_FILES ${PROJECT_SOURCE_DIR}/src/Game/*.cpp)
+# Organize source files by folder
+file(GLOB GAME_CORE_SRC ${PROJECT_SOURCE_DIR}/src/Game/Core/*.cpp)
+file(GLOB GAME_CORE_INC ${PROJECT_SOURCE_DIR}/src/Game/Core/*.h)
+
+file(GLOB GAME_SYSTEMS_SRC ${PROJECT_SOURCE_DIR}/src/Game/Systems/*.cpp)
+file(GLOB GAME_SYSTEMS_INC ${PROJECT_SOURCE_DIR}/src/Game/Systems/*.h)
+
+file(GLOB GAME_PLAYER_SRC ${PROJECT_SOURCE_DIR}/src/Game/Player/*.cpp)
+file(GLOB GAME_PLAYER_INC ${PROJECT_SOURCE_DIR}/src/Game/Player/*.h)
+
+file(GLOB GAME_RENDERING_SRC ${PROJECT_SOURCE_DIR}/src/Game/Rendering/*.cpp)
+file(GLOB GAME_RENDERING_INC ${PROJECT_SOURCE_DIR}/src/Game/Rendering/*.h)
+
+file(GLOB GAME_INPUT_SRC ${PROJECT_SOURCE_DIR}/src/Game/Input/*.cpp)
+file(GLOB GAME_INPUT_INC ${PROJECT_SOURCE_DIR}/src/Game/Input/*.h)
+
+file(GLOB GAME_UTILS_INC ${PROJECT_SOURCE_DIR}/src/Game/Utils/*.h)
+
+# Create source groups for Visual Studio filters (organizes files in Solution Explorer)
+source_group("Core" FILES ${GAME_CORE_SRC} ${GAME_CORE_INC})
+source_group("Systems" FILES ${GAME_SYSTEMS_SRC} ${GAME_SYSTEMS_INC})
+source_group("Player" FILES ${GAME_PLAYER_SRC} ${GAME_PLAYER_INC})
+source_group("Rendering" FILES ${GAME_RENDERING_SRC} ${GAME_RENDERING_INC})
+source_group("Input" FILES ${GAME_INPUT_SRC} ${GAME_INPUT_INC})
+source_group("Utils" FILES ${GAME_UTILS_INC})
 
 add_executable(Game WIN32
-	${GAME_INC_FILES} 
-	${GAME_SRC_FILES}
+	${GAME_CORE_SRC} ${GAME_CORE_INC}
+	${GAME_SYSTEMS_SRC} ${GAME_SYSTEMS_INC}
+	${GAME_PLAYER_SRC} ${GAME_PLAYER_INC}
+	${GAME_RENDERING_SRC} ${GAME_RENDERING_INC}
+	${GAME_INPUT_SRC} ${GAME_INPUT_INC}
+	${GAME_UTILS_INC}
 )
 
 target_include_directories(Game PRIVATE 
 	"${PROJECT_SOURCE_DIR}/src/Game"
+	"${PROJECT_SOURCE_DIR}/src/Game/Core"
+	"${PROJECT_SOURCE_DIR}/src/Game/Systems"
+	"${PROJECT_SOURCE_DIR}/src/Game/Player"
+	"${PROJECT_SOURCE_DIR}/src/Game/Rendering"
+	"${PROJECT_SOURCE_DIR}/src/Game/Input"
+	"${PROJECT_SOURCE_DIR}/src/Game/Utils"
 	"${FREE_GLUT_INC_DIR}"
 )
 
