@@ -121,23 +121,23 @@ void UIRenderer::RenderMenu(const MyGame& game, const HiveSystem& hives)
 
     DrawAnimatedBackground(menuTime);
 
-    App::Print(387, 702, "BUG SWARM", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
+    App::Print(387, 700, "BUG SWARM", 0.1f, 0.1f, 0.1f, GLUT_BITMAP_TIMES_ROMAN_24);
     App::Print(385, 700, "BUG SWARM", 1.0f, 0.95f, 0.20f, GLUT_BITMAP_TIMES_ROMAN_24);
-    App::Print(280, 670, "TACTICAL ERADICATION PROTOCOL", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
+    App::Print(385, 670, "TACTICAL ERADICATION PROTOCOL", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_12);
 
     const float mapX = 80.0f;
     const float mapY = 380.0f;
     const float mapW = 240.0f;
     const float mapH = 240.0f;
 
-    App::Print(80, 635, "TACTICAL MAP", 0.70f, 0.90f, 1.00f);
+    App::Print(80, 650, "TACTICAL MAP", 0.70f, 0.90f, 1.00f);
     DrawTacticalMap(hives, mapX, mapY, mapW, mapH, menuTime);
 
     App::Print(380, 620, "SELECT DIFFICULTY", 0.70f, 0.90f, 1.00f);
-    App::Print(380, 600, "Use UP/DOWN or D-Pad", 0.50f, 0.60f, 0.70f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(380, 600, "Use W/D or L-Stick", 0.50f, 0.60f, 0.70f, GLUT_BITMAP_HELVETICA_10);
 
     const float optionY = 570.0f;
-    const float optionSpacing = 20.0f;
+    const float optionSpacing = 40.0f;
 
     const DifficultyLevel selectedDifficulty = game.GetSelectedDifficulty();
 
@@ -161,7 +161,7 @@ void UIRenderer::RenderMenu(const MyGame& game, const HiveSystem& hives)
 
         const float alpha = isSelected ? 1.0f : 0.5f;
         App::Print(400, yPos, name, r * alpha, g * alpha, b * alpha);
-        App::Print(505, yPos, desc, 0.60f * alpha, 0.70f * alpha, 0.80f * alpha, GLUT_BITMAP_HELVETICA_10);
+        App::Print(600, yPos, desc, 0.60f * alpha, 0.70f * alpha, 0.80f * alpha, GLUT_BITMAP_HELVETICA_10);
     }
 
     App::Print(415, 295, "MISSION OBJECTIVE", 1.0f, 0.55f, 0.10f);
@@ -178,8 +178,8 @@ void UIRenderer::RenderMenu(const MyGame& game, const HiveSystem& hives)
     App::Print(80, 265, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 245, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 225, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(80, 205, "Scale:  Hold Left = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(80, 190, "        Hold Right = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 205, "Scale:  Hold Left Arrow Key = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(80, 190, "        Hold Right Arrow Key = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 170, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 140, "SCALE MECHANICS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_10);
     App::Print(80, 120, "Small: +Speed -Health -Damage", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
@@ -248,8 +248,8 @@ void UIRenderer::RenderPauseOverlay(const Player& player, const HiveSystem& hive
     App::Print(220, 295, "Pulse:  Space", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 275, "Slash:  F", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 255, "Meteor: E", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(220, 235, "Scale:  Left = Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
-    App::Print(220, 220, "        Right = Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 235, "Scale:  Left Arrow Key= Small", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
+    App::Print(220, 220, "        Right Arrow Key= Big", 1.0f, 0.5f, 0.3f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 200, "View:   V", 1.0f, 1.0f, 1.0f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 170, "SCALE MECHANICS:", 0.70f, 0.90f, 1.00f, GLUT_BITMAP_HELVETICA_10);
     App::Print(220, 150, "Small: +Speed -Health -Damage", 0.3f, 1.0f, 0.3f, GLUT_BITMAP_HELVETICA_10);
