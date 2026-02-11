@@ -3,7 +3,7 @@
 
 **`C++`** • **`Custom ECS`** • **`Spatial Partitioning`**
 
-### *200,000 AI entities. Zero screen culling. 60 FPS locked.*
+### *200,000 AI entities.*
 
 **🔑 What Makes This Special:**
 - ⚡ **Spatial Grid Hashing** for O(1) neighbor queries instead of O(n²) brute force
