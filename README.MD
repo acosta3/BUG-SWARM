@@ -8,7 +8,7 @@
 **🔑 What Makes This Special:**
 - ⚡ **Spatial Grid Hashing** for O(1) neighbor queries instead of O(n²) brute force
 - 🎯 **Distance-Based LOD System** - entities far from camera are not taking up resources
-- 🧠 **Data-Oriented Design** - AoS → SoA refactor for better cache perfromance
+- 🧠 **Data-Oriented Design** - AoS → SoA refactor for better cache performance
 
 
 **💡 Technical Deep Dive:**
